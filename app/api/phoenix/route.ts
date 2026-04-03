@@ -3,12 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 const PHOENIX = process.env.PHOENIX_URL ?? "http://localhost:6006";
 
 function buildPhoenixUrl(req: NextRequest): string {
-  const params = new URLSearchParams(req.nextUrl.search);
-  const path = params.get("path") ?? "/v1/prompts";
-  params.delete("path");
+  // Use raw search string to preserve repeated params like span_ids
+  const raw = req.nextUrl.search; // e.g. ?path=/v1/foo&span_ids=a&span_ids=b
+  const match = raw.match(/[?&]path=([^&]*)/);
+  const path = match ? decodeURIComponent(match[1]) : "/v1/prompts";
 
-  // Forward remaining query params to Phoenix
-  const remaining = params.toString();
+  // Remove path= param, keep everything else
+  const remaining = raw
+    .replace(/[?&]path=[^&]*/, "")
+    .replace(/^\?/, "")
+    .replace(/^&/, "");
+
   return remaining ? `${PHOENIX}${path}?${remaining}` : `${PHOENIX}${path}`;
 }
 
