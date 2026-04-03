@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 
 const PHOENIX = process.env.PHOENIX_URL ?? "http://localhost:6006";
 
+function buildPhoenixUrl(req: NextRequest): string {
+  const params = new URLSearchParams(req.nextUrl.search);
+  const path = params.get("path") ?? "/v1/prompts";
+  params.delete("path");
+
+  // Forward remaining query params to Phoenix
+  const remaining = params.toString();
+  return remaining ? `${PHOENIX}${path}?${remaining}` : `${PHOENIX}${path}`;
+}
+
 export async function POST(req: NextRequest) {
-  const path = req.nextUrl.searchParams.get("path") ?? "/graphql";
+  const url = buildPhoenixUrl(req);
   const body = await req.text();
 
-  const res = await fetch(`${PHOENIX}${path}`, {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
@@ -21,9 +31,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const path = req.nextUrl.searchParams.get("path") ?? "/v1/prompts";
+  const url = buildPhoenixUrl(req);
 
-  const res = await fetch(`${PHOENIX}${path}`, {
+  const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
     signal: AbortSignal.timeout(10000),
   });
@@ -36,9 +46,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const path = req.nextUrl.searchParams.get("path") ?? "";
+  const url = buildPhoenixUrl(req);
 
-  const res = await fetch(`${PHOENIX}${path}`, {
+  const res = await fetch(url, {
     method: "DELETE",
     signal: AbortSignal.timeout(10000),
   });

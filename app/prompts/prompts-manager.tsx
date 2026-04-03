@@ -4,15 +4,20 @@ import { useEffect, useState, useCallback } from "react";
 import {
   fetchPrompts,
   fetchPromptVersions,
+  fetchPromptVersionTags,
+  addPromptVersionTag,
+  deletePromptVersionTag,
   createPrompt,
   updatePrompt,
   deletePrompt,
   normalizeContent,
   PromptVersion,
   PromptInfo,
+  PromptTag,
 } from "@/lib/phoenix";
 import {
   Plus,
+  Tag,
   Pencil,
   Trash2,
   X,
@@ -23,9 +28,13 @@ import {
 } from "lucide-react";
 import { Nav } from "@/components/nav";
 
+interface VersionWithTags extends PromptVersion {
+  tags: PromptTag[];
+}
+
 interface PromptWithVersions {
   info: PromptInfo;
-  versions: PromptVersion[];
+  versions: VersionWithTags[];
 }
 
 export function PromptsManager() {
@@ -47,7 +56,12 @@ export function PromptsManager() {
       const result: PromptWithVersions[] = [];
       for (const p of ps) {
         const versions = await fetchPromptVersions(p.name);
-        result.push({ info: p, versions });
+        const versionsWithTags: VersionWithTags[] = [];
+        for (const v of versions) {
+          const tags = await fetchPromptVersionTags(v.id);
+          versionsWithTags.push({ ...v, tags });
+        }
+        result.push({ info: p, versions: versionsWithTags });
       }
       setPrompts(result);
     } catch (e) {
@@ -165,15 +179,43 @@ export function PromptsManager() {
                         key={v.id}
                         className="border-b last:border-b-0 px-4 py-3.5"
                       >
-                        <div className="mb-2.5 flex items-center gap-2">
+                        <div className="mb-2.5 flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-medium">
                             {String(v.description || v.id)}
                           </span>
                           {i === 0 && (
-                            <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-medium text-emerald-400">
+                            <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 text-[9px] font-medium">
                               latest
                             </span>
                           )}
+                          {v.tags.map((tag) => (
+                            <span key={tag.name} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-medium">
+                              <Tag className="h-2.5 w-2.5" />
+                              {tag.name}
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`"${tag.name}" 태그를 삭제하시겠습니까?`)) return;
+                                  try { await deletePromptVersionTag(v.id, tag.name); await load(); }
+                                  catch (err: any) { alert(err.message); }
+                                }}
+                                className="ml-0.5 hover:text-foreground text-muted-foreground"
+                              >
+                                <X className="h-2.5 w-2.5" />
+                              </button>
+                            </span>
+                          ))}
+                          <button
+                            onClick={async () => {
+                              const name = prompt("태그 이름 (예: production, staging)");
+                              if (!name?.trim()) return;
+                              try { await addPromptVersionTag(v.id, name.trim()); await load(); }
+                              catch (err: any) { alert(err.message); }
+                            }}
+                            className="rounded-full border border-dashed px-2 py-0.5 text-[9px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+                          >
+                            + tag
+                          </button>
                           <span className="text-[10px] text-muted-foreground">
                             {v.model_name} / temp{" "}
                             {v.invocation_parameters?.openai?.temperature ??
