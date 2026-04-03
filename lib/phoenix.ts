@@ -52,7 +52,16 @@ export interface ComparisonResult {
   error?: string;
 }
 
-const PROJECT_ID = "UHJvamVjdDox";
+export interface Project {
+  id: string;
+  name: string;
+}
+
+export async function fetchProjects(): Promise<Project[]> {
+  const res = await fetch("/api/phoenix?path=/v1/projects");
+  const data = await res.json();
+  return (data.data ?? []).map((p: any) => ({ id: p.name, name: p.name }));
+}
 
 function extractTag(input: string, tag: string): string {
   try {
@@ -73,51 +82,82 @@ function extractResponse(output: string): string {
   return "";
 }
 
-export async function fetchTraces(): Promise<Trace[]> {
-  const query = `{
-    node(id: "${PROJECT_ID}") {
-      ... on Project {
-        spans(first: 50, sort: { col: startTime, dir: desc }, filterCondition: "span_kind == \\"LLM\\"") {
-          edges {
-            node {
-              name
-              context { spanId traceId }
-              parentId
-              startTime
-              latencyMs
-              input { value }
-              output { value }
-              spanAnnotations { name label score }
-            }
-          }
-        }
-      }
-    }
-  }`;
+export async function fetchTraces(projectName: string): Promise<Trace[]> {
+  // 1. Get all spans
+  const spansRes = await fetch(
+    `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/spans?limit=1000`,
+  );
+  const spansData = await spansRes.json();
+  const allSpans: any[] = spansData.data ?? [];
 
-  const res = await fetch("/api/phoenix?path=/graphql", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
+  // 2. Find LLM spans with <context>/<question>
+  const llmSpans = allSpans.filter((s) => {
+    if (s.span_kind !== "LLM") return false;
+    const input = s.attributes?.["input.value"] ?? "";
+    return input.includes("<context>") && input.includes("<question>");
   });
-  const data = await res.json();
-  const spans = data.data?.node?.spans?.edges?.map((e: any) => e.node) ?? [];
 
-  return spans
-    .filter((s: any) => {
-      const input = s.input?.value ?? "";
-      return input.includes("<context>") && input.includes("<question>");
-    })
-    .map((s: any) => ({
-      spanId: s.context.spanId,
-      traceId: s.context.traceId,
-      time: s.startTime,
-      latency: s.latencyMs,
-      query: extractTag(s.input?.value ?? "", "question"),
-      context: extractTag(s.input?.value ?? "", "context"),
-      response: extractResponse(s.output?.value ?? ""),
-      annotations: s.spanAnnotations ?? [],
+  // 3. Find root spans (parent_id null) and build traceId -> rootSpanId map
+  const rootMap: Record<string, string> = {};
+  for (const s of allSpans) {
+    if (s.parent_id === null) {
+      rootMap[s.context.trace_id] = s.context.span_id;
+    }
+  }
+
+  // 4. Build traces, fetch annotations per span individually
+  const results: Trace[] = [];
+
+  for (const s of llmSpans) {
+    const sid = s.context.span_id;
+    const rid = rootMap[s.context.trace_id];
+    const input = s.attributes?.["input.value"] ?? "";
+    const output = s.attributes?.["output.value"] ?? "";
+
+    // Fetch LLM span annotations
+    const annRes = await fetch(
+      `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/span_annotations&span_ids=${sid}`,
+    );
+    const annData = await annRes.json();
+    const spanAnns: Annotation[] = (annData.data ?? []).map((a: any) => ({
+      name: a.name,
+      label: a.result?.label ?? "",
+      score: a.result?.score ?? 0,
     }));
+
+    // Fetch root span annotations (for rag_relevance etc)
+    let rootAnns: Annotation[] = [];
+    if (rid && rid !== sid) {
+      const rootRes = await fetch(
+        `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/span_annotations&span_ids=${rid}`,
+      );
+      const rootData = await rootRes.json();
+      rootAnns = (rootData.data ?? []).map((a: any) => ({
+        name: a.name,
+        label: a.result?.label ?? "",
+        score: a.result?.score ?? 0,
+      }));
+    }
+
+    // Merge: span first, then root-only
+    const spanNames = new Set(spanAnns.map((a) => a.name));
+    const merged = [...spanAnns, ...rootAnns.filter((a) => !spanNames.has(a.name))];
+
+    results.push({
+      spanId: sid,
+      traceId: s.context.trace_id,
+      time: s.start_time,
+      latency: s.end_time
+        ? new Date(s.end_time).getTime() - new Date(s.start_time).getTime()
+        : 0,
+      query: extractTag(input, "question"),
+      context: extractTag(input, "context"),
+      response: extractResponse(output),
+      annotations: merged,
+    });
+  }
+
+  return results;
 }
 
 export async function fetchPrompts(): Promise<PromptInfo[]> {
@@ -134,6 +174,54 @@ export async function fetchPromptVersions(
   );
   const data = await res.json();
   return data.data ?? [];
+}
+
+// --- Prompt Tags ---
+
+export interface PromptTag {
+  name: string;
+}
+
+export async function fetchPromptVersionTags(
+  versionId: string,
+): Promise<PromptTag[]> {
+  const res = await fetch(
+    `/api/phoenix?path=/v1/prompt_versions/${encodeURIComponent(versionId)}/tags`,
+  );
+  const data = await res.json();
+  return data.data ?? [];
+}
+
+export async function addPromptVersionTag(
+  versionId: string,
+  tagName: string,
+): Promise<void> {
+  const res = await fetch(
+    `/api/phoenix?path=/v1/prompt_versions/${encodeURIComponent(versionId)}/tags`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: tagName }),
+    },
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
+}
+
+export async function deletePromptVersionTag(
+  versionId: string,
+  tagName: string,
+): Promise<void> {
+  const res = await fetch(
+    `/api/phoenix?path=/v1/prompt_versions/${encodeURIComponent(versionId)}/tags/${encodeURIComponent(tagName)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
 }
 
 // --- Prompt CRUD ---
@@ -218,6 +306,17 @@ export async function deletePrompt(name: string): Promise<void> {
   }
 }
 
+export async function deleteTrace(traceId: string): Promise<void> {
+  const res = await fetch(
+    `/api/phoenix?path=/v1/traces/${encodeURIComponent(traceId)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
+}
+
 export async function callLLM(
   version: PromptVersion,
   query: string,
@@ -239,6 +338,7 @@ export async function callLLM(
       model: version.model_name || "gpt-4o-mini",
       messages,
       temperature: params.temperature ?? 0.7,
+      promptLabel: version.description || version.id,
     }),
   });
 
