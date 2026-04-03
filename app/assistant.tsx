@@ -11,6 +11,7 @@ import { useRef } from "react";
 
 import { createThread, sendMessage } from "@/lib/chatApi";
 import { Thread } from "@/components/assistant-ui/thread";
+import { Nav } from "@/components/nav";
 
 const attachmentAdapter = new CompositeAttachmentAdapter([
   new SimpleImageAttachmentAdapter(),
@@ -45,7 +46,8 @@ export function Assistant() {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="flex h-dvh">
+      <div className="flex h-dvh flex-col">
+        <Nav />
         <div className="flex-1 min-h-0">
           <Thread />
         </div>
