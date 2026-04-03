@@ -8,44 +8,20 @@ import {
   fetchProjects,
   callLLM,
   deleteTrace,
-  normalizeContent,
   Trace,
   PromptVersion,
   ComparisonResult,
   Project,
 } from "@/lib/phoenix";
-import { RefreshCw, Play, Eye, X, Inbox, ChevronDown, Trash2 } from "lucide-react";
+import { RefreshCw, Play, Pencil, Inbox, ChevronDown, Trash2, Filter } from "lucide-react";
 import { Nav } from "@/components/nav";
 import { AnnotationBadges } from "@/components/annotation-badge";
+import { PromptEditModal } from "@/components/prompt-edit-modal";
 
 interface VersionOption {
   promptName: string;
   label: string;
   version: PromptVersion;
-}
-
-function PreviewModal({ version, onClose }: { version: PromptVersion; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-xl max-h-[80vh] overflow-y-auto rounded-xl border bg-background shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 flex items-center justify-between border-b bg-background px-5 py-3">
-          <h2 className="text-sm font-semibold">{version.description || version.id}</h2>
-          <button onClick={onClose} className="rounded-md p-1 hover:bg-muted"><X className="h-4 w-4" /></button>
-        </div>
-        <div className="space-y-4 p-5">
-          {version.template?.messages?.map((m, i) => (
-            <div key={i}>
-              <span className="inline-block rounded-md bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">{m.role}</span>
-              <pre className="mt-1.5 whitespace-pre-wrap rounded-lg border bg-muted/30 p-4 font-sans text-xs leading-relaxed">{normalizeContent(m.content)}</pre>
-            </div>
-          ))}
-          <p className="text-[11px] text-muted-foreground">
-            Model: {version.model_name} · Temp: {version.invocation_parameters?.openai?.temperature ?? "—"}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export function Playground() {
@@ -59,8 +35,36 @@ export function Playground() {
   const [promptB, setPromptB] = useState("");
   const [results, setResults] = useState<ComparisonResult[]>([]);
   const [running, setRunning] = useState(false);
-  const [previewVersion, setPreviewVersion] = useState<PromptVersion | null>(null);
+  const [editTarget, setEditTarget] = useState<{ promptName: string; version: PromptVersion } | null>(null);
   const [contextOpen, setContextOpen] = useState(false);
+  const [editQuery, setEditQuery] = useState("");
+  const [editContext, setEditContext] = useState("");
+  const [spanKinds, setSpanKinds] = useState<Set<string>>(new Set(["LLM"]));
+  const [contentFilter, setContentFilter] = useState("ALL");
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  // Load/save filters per project
+  function filterKey(pid: string) { return `pg_filter_${pid}`; }
+
+  function loadFilters(pid: string) {
+    if (typeof window === "undefined" || !pid) return;
+    try {
+      const saved = localStorage.getItem(filterKey(pid));
+      if (saved) {
+        const { kinds, content } = JSON.parse(saved);
+        setSpanKinds(new Set(kinds ?? ["LLM"]));
+        setContentFilter(content ?? "ALL");
+        return;
+      }
+    } catch {}
+    setSpanKinds(new Set(["LLM"]));
+    setContentFilter("ALL");
+  }
+
+  function saveFilters(pid: string, kinds: Set<string>, content: string) {
+    if (!pid) return;
+    localStorage.setItem(filterKey(pid), JSON.stringify({ kinds: [...kinds], content }));
+  }
   const [deleteMode, setDeleteMode] = useState(false);
   const [deleteModeVisible, setDeleteModeVisible] = useState(false);
   const [deleteSelection, setDeleteSelection] = useState<Set<string>>(new Set());
@@ -81,16 +85,20 @@ export function Playground() {
     try {
       const ps = await fetchProjects();
       setProjects(ps);
-      if (ps.length > 0 && !projectId) setProjectId(ps[0].id);
+      if (ps.length > 0 && !projectId) {
+        setProjectId(ps[0].id);
+        loadFilters(ps[0].id);
+      }
     } catch (e) { console.error(e); }
   }, [projectId]);
 
   const loadTraces = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    try { setTraces(await fetchTraces(projectId)); } catch (e) { console.error(e); }
+    const kindsStr = spanKinds.size === 0 ? "ALL" : [...spanKinds].join(",");
+    try { setTraces(await fetchTraces(projectId, kindsStr, contentFilter)); } catch (e) { console.error(e); }
     setLoading(false);
-  }, [projectId]);
+  }, [projectId, spanKinds, contentFilter]);
 
   const loadPrompts = useCallback(async () => {
     try {
@@ -109,7 +117,7 @@ export function Playground() {
 
 
   async function handleRun() {
-    if (!selected) return;
+    if (!editQuery.trim()) return;
     const vA = versionOptions.find((o) => o.version.id === promptA)?.version;
     const vB = promptB ? versionOptions.find((o) => o.version.id === promptB)?.version : null;
     if (!vA) return;
@@ -120,7 +128,7 @@ export function Playground() {
     setResults([...nr]);
 
     const run = (v: PromptVersion, idx: number) =>
-      callLLM(v, selected.query, selected.context)
+      callLLM(v, editQuery, editContext)
         .then((r) => { nr[idx] = { ...nr[idx], text: r.text, tokens: r.tokens, loading: false }; setResults([...nr]); })
         .catch((e: any) => { nr[idx] = { ...nr[idx], loading: false, error: e.message }; setResults([...nr]); });
 
@@ -176,11 +184,11 @@ export function Playground() {
         {/* ── LEFT: Trace list ── */}
         <div className="flex w-96 shrink-0 flex-col border-r bg-muted/5">
           {/* Header */}
-          <div className="border-b px-3 py-3">
+          <div className="border-b px-3 py-3 overflow-visible relative z-10">
             <div className="flex items-center gap-2">
               <select
                 value={projectId}
-                onChange={(e) => { setProjectId(e.target.value); setSelected(null); setResults([]); }}
+                onChange={(e) => { setProjectId(e.target.value); loadFilters(e.target.value); setSelected(null); setResults([]); }}
                 className="h-8 flex-1 rounded-lg border bg-background px-2.5 text-[13px] font-medium outline-none transition focus:ring-2 focus:ring-ring/40"
               >
                 {projects.map((p) => (
@@ -199,7 +207,18 @@ export function Playground() {
                 <Trash2 className={`h-3.5 w-3.5 ${deleteMode ? "text-foreground" : ""}`} />
               </button>
             </div>
-            <p className="mt-1.5 text-[10px] tabular-nums text-muted-foreground">{traces.length} traces</p>
+            <div className="mt-2 flex items-center gap-1.5">
+              <button
+                id="filter-btn"
+                onClick={() => setFilterOpen(!filterOpen)}
+                className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] transition-colors hover:bg-accent
+                  ${filterOpen ? "bg-accent border-primary" : "bg-background"}`}
+              >
+                <Filter className="h-3 w-3" />
+                Filter
+                <span className="ml-1 rounded bg-foreground/10 px-1 text-[9px] tabular-nums">{traces.length}</span>
+              </button>
+            </div>
           </div>
 
           {/* Delete bar */}
@@ -239,7 +258,8 @@ export function Playground() {
                 <div key={t.spanId}
                   onClick={() => {
                     if (deleteMode) toggleSelect(t.traceId);
-                    else { setSelected(t); setResults([]); setContextOpen(false); }
+                    else if (selected?.spanId === t.spanId) { setSelected(null); setEditQuery(""); setEditContext(""); setResults([]); }
+                    else { setSelected(t); setEditQuery(t.query); setEditContext(t.context); setResults([]); setContextOpen(false); }
                   }}
                   className={`group cursor-pointer border-b transition-colors hover:bg-accent/40
                     ${active && !deleteMode ? "bg-accent" : ""}
@@ -281,89 +301,107 @@ export function Playground() {
         {/* ── RIGHT: 상하 구조 ── */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 
-          {/* TOP: Prompt 선택 + Query */}
-          {selected && (
-            <div className="shrink-0 border-b">
-              {/* Prompt 선택 바 */}
-              <div className="flex items-end gap-4 px-6 pt-4 pb-3">
-                <div className="flex-1 min-w-0">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prompt A</label>
-                    {selA && (
-                      <button onClick={() => setPreviewVersion(selA.version)}
-                        className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-                        <Eye className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                  <select value={promptA} onChange={(e) => setPromptA(e.target.value)}
-                    className="h-9 w-full rounded-lg border bg-background px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-ring/40">
-                    {versionOptions.map((o) => <option key={o.version.id} value={o.version.id}>{o.label}</option>)}
-                  </select>
+          {/* TOP: Prompt 선택 + Query/Context */}
+          <div className="shrink-0 border-b">
+            {/* Prompt 선택 바 */}
+            <div className="flex items-end gap-4 px-6 pt-4 pb-3">
+              <div className="flex-1 min-w-0">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prompt A</label>
+                  {selA && (
+                    <button onClick={() => setEditTarget({ promptName: selA.promptName, version: selA.version })}
+                      className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prompt B</label>
-                    {selB && (
-                      <button onClick={() => setPreviewVersion(selB.version)}
-                        className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-                        <Eye className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                  <select value={promptB} onChange={(e) => setPromptB(e.target.value)}
-                    className="h-9 w-full rounded-lg border bg-background px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-ring/40">
-                    <option value="">— none —</option>
-                    {versionOptions.map((o) => <option key={o.version.id} value={o.version.id}>{o.label}</option>)}
-                  </select>
-                </div>
-                <button onClick={handleRun} disabled={running}
-                  className="h-9 shrink-0 flex items-center gap-2 rounded-lg bg-primary px-5 text-[13px] font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-35 disabled:cursor-not-allowed">
-                  <Play className="h-4 w-4" />
-                  {running ? "Running…" : "Run"}
-                </button>
+                <select value={promptA} onChange={(e) => setPromptA(e.target.value)}
+                  className="h-9 w-full rounded-lg border bg-background px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-ring/40">
+                  {versionOptions.map((o) => <option key={o.version.id} value={o.version.id}>{o.label}</option>)}
+                </select>
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prompt B</label>
+                  {selB && (
+                    <button onClick={() => setEditTarget({ promptName: selB.promptName, version: selB.version })}
+                      className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                <select value={promptB} onChange={(e) => setPromptB(e.target.value)}
+                  className="h-9 w-full rounded-lg border bg-background px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-ring/40">
+                  <option value="">— none —</option>
+                  {versionOptions.map((o) => <option key={o.version.id} value={o.version.id}>{o.label}</option>)}
+                </select>
+              </div>
+              <button onClick={handleRun} disabled={running || !editQuery.trim()}
+                className="h-9 shrink-0 flex items-center gap-2 rounded-lg bg-primary px-5 text-[13px] font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-35 disabled:cursor-not-allowed">
+                <Play className="h-4 w-4" />
+                {running ? "Running…" : "Run"}
+              </button>
+            </div>
 
-              {/* Query + Context */}
-              <div className="px-6 pb-3">
-                <p className="text-[13px] leading-relaxed">
-                  <span className="mr-2 inline-block rounded bg-muted px-1.5 py-0.5 text-[9px] font-bold uppercase">Q</span>
-                  {selected.query}
-                </p>
+            {/* Query + Context (editable) */}
+            <div className="px-6 pb-3">
+              <div className="mb-2">
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Query</label>
+                <textarea
+                  value={editQuery}
+                  onChange={(e) => setEditQuery(e.target.value)}
+                  rows={2}
+                  placeholder="질문을 입력하세요..."
+                  className="w-full rounded-lg border bg-background px-3 py-2 text-[13px] leading-relaxed outline-none focus:ring-2 focus:ring-ring/40 resize-none"
+                />
+              </div>
+              <div>
                 <button onClick={() => setContextOpen(!contextOpen)}
-                  className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+                  className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground">
                   <ChevronDown className={`h-3 w-3 transition-transform ${contextOpen ? "rotate-180" : ""}`} />
-                  Context ({selected.context.length.toLocaleString()} chars)
+                  Context ({editContext.length.toLocaleString()} chars)
                 </button>
                 {contextOpen && (
-                  <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border bg-muted/20 p-3 text-[12px] leading-relaxed text-muted-foreground">
-                    {selected.context}
-                  </p>
+                  <textarea
+                    value={editContext}
+                    onChange={(e) => setEditContext(e.target.value)}
+                    rows={5}
+                    placeholder="컨텍스트를 입력하거나 트레이스에서 자동으로 채워집니다..."
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-[12px] leading-relaxed text-muted-foreground outline-none focus:ring-2 focus:ring-ring/40 resize-y"
+                  />
                 )}
               </div>
             </div>
-          )}
+          </div>
 
           {/* BOTTOM: Original | A | B */}
           <div className="flex-1">
-            {!selected ? (
+            {results.length === 0 && !selected ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 opacity-30">
                 <Inbox className="h-10 w-10" />
-                <p className="text-sm">왼쪽에서 트레이스를 선택하세요</p>
+                <p className="text-sm">트레이스를 선택하거나 직접 Query를 입력하세요</p>
               </div>
             ) : (
               <div className="h-full px-6 py-4">
-                <div className={`grid h-full gap-4 ${results.length === 0 ? "grid-cols-1" : results.length === 1 ? "grid-cols-2" : "grid-cols-3"}`}>
-                  {/* Original */}
-                  <div className="flex flex-col rounded-xl border">
-                    <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2.5">
-                      <span className="text-xs font-semibold">Original</span>
-                      <AnnotationBadges annotations={selected.annotations} />
+                <div className={`grid h-full gap-4 ${
+                  results.length === 0
+                    ? selected ? "grid-cols-1" : "grid-cols-1"
+                    : results.length === 1
+                      ? selected ? "grid-cols-2" : "grid-cols-1"
+                      : selected ? "grid-cols-3" : "grid-cols-2"
+                }`}>
+                  {/* Original (only if trace selected) */}
+                  {selected && (
+                    <div className="flex flex-col rounded-xl border">
+                      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2.5">
+                        <span className="text-xs font-semibold">Original</span>
+                        <AnnotationBadges annotations={selected.annotations} />
+                      </div>
+                      <div className="flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-[13px] leading-relaxed">
+                        {selected.response}
+                      </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-[13px] leading-relaxed">
-                      {selected.response}
-                    </div>
-                  </div>
+                  )}
 
                   {/* Results */}
                   {results.map((r, i) => (
@@ -398,7 +436,97 @@ export function Playground() {
         </div>
       </div>
 
-      {previewVersion && <PreviewModal version={previewVersion} onClose={() => setPreviewVersion(null)} />}
+      {editTarget && (
+        <PromptEditModal
+          promptName={editTarget.promptName}
+          version={editTarget.version}
+          onClose={() => setEditTarget(null)}
+          onSave={() => { loadPrompts(); setEditTarget(null); }}
+        />
+      )}
+
+      {/* Filter dropdown */}
+      {filterOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
+          <div
+            className="fixed z-50 w-72 overflow-hidden rounded-xl border bg-background shadow-xl"
+            style={{
+              top: (document.getElementById("filter-btn")?.getBoundingClientRect().bottom ?? 0) + 6,
+              left: document.getElementById("filter-btn")?.getBoundingClientRect().left ?? 0,
+            }}
+          >
+            {/* Span Kind */}
+            <div className="border-b px-3 py-2.5">
+              <p className="mb-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Span Kind</p>
+              <div className="flex flex-wrap gap-1">
+                {["ALL", "LLM", "CHAIN", "RETRIEVER", "PROMPT"].map((kind) => {
+                  const isAll = kind === "ALL";
+                  const active = isAll
+                    ? spanKinds.size === 0
+                    : spanKinds.has(kind);
+                  return (
+                    <button
+                      key={kind}
+                      onClick={() => {
+                        let next: Set<string>;
+                        if (isAll) {
+                          next = new Set();
+                        } else {
+                          next = new Set(spanKinds);
+                          if (active) next.delete(kind); else next.add(kind);
+                        }
+                        setSpanKinds(next);
+                        saveFilters(projectId, next, contentFilter);
+                        setSelected(null); setResults([]);
+                      }}
+                      className={`rounded-md border px-2 py-1 text-[10px] font-mono transition-all
+                        ${active
+                          ? "bg-foreground text-background border-foreground"
+                          : "bg-background text-muted-foreground border-border hover:border-foreground/40"
+                        }`}
+                    >
+                      {kind}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-3 py-2.5">
+              <p className="mb-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Content</p>
+              <div className="flex flex-col gap-0.5">
+                {[
+                  { value: "ALL", label: "All" },
+                  { value: "RAG", label: "RAG only" },
+                  { value: "PLAYGROUND", label: "Playground only" },
+                ].map(({ value, label }) => {
+                  const active = contentFilter === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        setContentFilter(value);
+                        saveFilters(projectId, spanKinds, value);
+                        setSelected(null); setResults([]);
+                      }}
+                      className={`rounded-md px-2 py-1.5 text-left text-[11px] transition-colors
+                        ${active
+                          ? "bg-foreground/8 text-foreground font-medium"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                    >
+                      {active && <span className="mr-1.5">•</span>}
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

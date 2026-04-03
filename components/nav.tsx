@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, FlaskConical, FileText } from "lucide-react";
+import { MessageSquare, FlaskConical, FileText, FolderOpen } from "lucide-react";
 
 const links = [
   { href: "/", label: "Chat", icon: MessageSquare },
   { href: "/playground", label: "Playground", icon: FlaskConical },
   { href: "/prompts", label: "Prompts", icon: FileText },
+  { href: "/projects", label: "Projects", icon: FolderOpen },
 ];
 
 export function Nav() {

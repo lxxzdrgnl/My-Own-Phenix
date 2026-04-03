@@ -27,6 +27,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Nav } from "@/components/nav";
+import { ModelSelector } from "@/components/model-selector";
 
 interface VersionWithTags extends PromptVersion {
   tags: PromptTag[];
@@ -92,6 +93,8 @@ export function PromptsManager() {
       description: p.info.description ?? "",
       system: normalizeContent(msgs.find((m) => m.role === "system")?.content ?? ""),
       user: normalizeContent(msgs.find((m) => m.role === "user")?.content ?? "{{query}}"),
+      model: latest?.model_name ?? "gpt-4o-mini",
+      temperature: latest?.invocation_parameters?.openai?.temperature ?? 0.7,
     });
     setModal("edit");
   }
@@ -168,7 +171,7 @@ export function PromptsManager() {
                     className="rounded p-1.5 transition-colors hover:bg-red-500/10"
                     title="삭제"
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
                 </div>
 
@@ -276,6 +279,8 @@ function PromptModal({
     description: string;
     system: string;
     user: string;
+    model: string;
+    temperature: number;
   };
   onClose: () => void;
   onSave: () => void;
@@ -284,6 +289,8 @@ function PromptModal({
   const [desc, setDesc] = useState(initial?.description ?? "");
   const [system, setSystem] = useState(initial?.system ?? "");
   const [user, setUser] = useState(initial?.user ?? "{{query}}");
+  const [model, setModel] = useState(initial?.model ?? "gpt-4o-mini");
+  const [temperature, setTemperature] = useState(initial?.temperature ?? 0.7);
   const [versionDesc, setVersionDesc] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -297,7 +304,7 @@ function PromptModal({
     setError("");
     try {
       if (mode === "create") {
-        await createPrompt(name, desc, system, user);
+        await createPrompt(name, desc, system, user, model, temperature);
       } else {
         await updatePrompt(
           name,
@@ -305,6 +312,8 @@ function PromptModal({
           versionDesc || `v${Date.now()}`,
           system,
           user,
+          model,
+          temperature,
         );
       }
       onSave();
@@ -333,6 +342,30 @@ function PromptModal({
           </button>
         </div>
         <div className="flex flex-col gap-3 p-4">
+          {/* Model & Temperature */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Model
+              </label>
+              <ModelSelector value={model} onChange={setModel} />
+            </div>
+            <div className="w-28">
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Temperature
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={2}
+                step={0.1}
+                value={temperature}
+                onChange={(e) => setTemperature(parseFloat(e.target.value) || 0)}
+                className="h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          </div>
+          {/* Name & Description */}
           <div className="flex gap-3">
             <div className="flex-1">
               <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -371,6 +404,7 @@ function PromptModal({
               />
             </div>
           )}
+          {/* System Prompt */}
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               System Prompt
@@ -386,6 +420,7 @@ function PromptModal({
               {"{{context}}와 {{query}}를 변수로 사용할 수 있습니다"}
             </p>
           </div>
+          {/* User Template */}
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               User Template
