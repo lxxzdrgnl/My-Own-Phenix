@@ -12,6 +12,8 @@ import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
+import { AuthModal } from "@/components/auth-modal";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -35,9 +37,9 @@ import {
   RefreshCwIcon,
   SquareIcon,
 } from "lucide-react";
-import type { FC } from "react";
+import { type FC, useState, useRef, useCallback } from "react";
 
-export const Thread: FC = () => {
+export const Thread: FC<{ showWelcome?: boolean }> = ({ showWelcome = true }) => {
   return (
     <ThreadPrimitive.Root
       className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
@@ -49,9 +51,11 @@ export const Thread: FC = () => {
         turnAnchor="top"
         className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth px-4 pt-4"
       >
-        <AssistantIf condition={({ thread }) => thread.isEmpty}>
-          <ThreadWelcome />
-        </AssistantIf>
+        {showWelcome && (
+          <AssistantIf condition={({ thread }) => thread.isEmpty}>
+            <ThreadWelcome />
+          </AssistantIf>
+        )}
 
         <ThreadPrimitive.Messages
           components={{
@@ -145,20 +149,39 @@ const ThreadSuggestions: FC = () => {
 };
 
 const Composer: FC = () => {
+  const { user } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const dismissedRef = useRef(false);
+
+  const handleFocus = useCallback(() => {
+    if (!user && !dismissedRef.current) {
+      setShowAuthModal(true);
+    }
+  }, [user]);
+
+  const handleModalClose = useCallback(() => {
+    setShowAuthModal(false);
+    dismissedRef.current = true;
+  }, []);
+
   return (
-    <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
-      <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
-        <ComposerAttachments />
-        <ComposerPrimitive.Input
-          placeholder="Send a message..."
-          className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
-          rows={1}
-          autoFocus
-          aria-label="Message input"
-        />
-        <ComposerAction />
-      </ComposerPrimitive.AttachmentDropzone>
-    </ComposerPrimitive.Root>
+    <>
+      <AuthModal open={showAuthModal} onClose={handleModalClose} />
+      <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
+        <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
+          <ComposerAttachments />
+          <ComposerPrimitive.Input
+            placeholder="Send a message..."
+            className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+            rows={1}
+            autoFocus={!!user}
+            onFocus={handleFocus}
+            aria-label="Message input"
+          />
+          <ComposerAction />
+        </ComposerPrimitive.AttachmentDropzone>
+      </ComposerPrimitive.Root>
+    </>
   );
 };
 
