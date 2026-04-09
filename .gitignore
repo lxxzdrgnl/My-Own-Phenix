@@ -18,3 +18,9 @@ build/
 
 # debug
 npm-debug.log*
+
+/lib/generated/prisma
+
+# prisma
+prisma/dev.db
+prisma/dev.db-journal
