@@ -48,6 +48,8 @@ export function PromptsManager() {
     description: string;
     system: string;
     user: string;
+    model: string;
+    temperature: number;
   } | null>(null);
 
   const load = useCallback(async () => {
