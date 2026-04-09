@@ -13,7 +13,7 @@ import {
   ComparisonResult,
   Project,
 } from "@/lib/phoenix";
-import { RefreshCw, Play, Pencil, Inbox, ChevronDown, Trash2, Filter } from "lucide-react";
+import { RefreshCw, Play, Pencil, Inbox, ChevronDown, Trash2, Filter, Plus, X } from "lucide-react";
 import { Nav } from "@/components/nav";
 import { AnnotationBadges } from "@/components/annotation-badge";
 import { PromptEditModal } from "@/components/prompt-edit-modal";
@@ -31,8 +31,7 @@ export function Playground() {
   const [selected, setSelected] = useState<Trace | null>(null);
   const [loading, setLoading] = useState(true);
   const [versionOptions, setVersionOptions] = useState<VersionOption[]>([]);
-  const [promptA, setPromptA] = useState("");
-  const [promptB, setPromptB] = useState("");
+  const [promptIds, setPromptIds] = useState<string[]>([]);
   const [results, setResults] = useState<ComparisonResult[]>([]);
   const [running, setRunning] = useState(false);
   const [editTarget, setEditTarget] = useState<{ promptName: string; version: PromptVersion } | null>(null);
@@ -108,23 +107,34 @@ export function Playground() {
         for (const v of await fetchPromptVersions(p.name))
           opts.push({ promptName: p.name, label: `${p.name} / ${v.description || v.id}`, version: v });
       setVersionOptions(opts);
-      if (opts.length > 0 && !promptA) setPromptA(opts[0].version.id);
+      if (opts.length > 0 && promptIds.length === 0) setPromptIds([opts[0].version.id]);
     } catch (e) { console.error(e); }
-  }, [promptA]);
+  }, [promptIds]);
 
   useEffect(() => { loadProjects(); loadPrompts(); }, [loadProjects, loadPrompts]);
   useEffect(() => { loadTraces(); }, [loadTraces]);
 
 
+  function addPrompt() {
+    const defaultId = versionOptions.length > 0 ? versionOptions[0].version.id : "";
+    setPromptIds(prev => [...prev, defaultId]);
+  }
+
+  function removePrompt(index: number) {
+    setPromptIds(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function updatePrompt(index: number, value: string) {
+    setPromptIds(prev => prev.map((v, i) => i === index ? value : v));
+  }
+
   async function handleRun() {
     if (!editQuery.trim()) return;
-    const vA = versionOptions.find((o) => o.version.id === promptA)?.version;
-    const vB = promptB ? versionOptions.find((o) => o.version.id === promptB)?.version : null;
-    if (!vA) return;
+    const versions = promptIds.map(id => versionOptions.find((o) => o.version.id === id)?.version).filter(Boolean) as PromptVersion[];
+    if (versions.length === 0) return;
 
     setRunning(true);
-    const nr: ComparisonResult[] = [{ label: vA.description || vA.id, text: "", tokens: 0, loading: true }];
-    if (vB) nr.push({ label: vB.description || vB.id, text: "", tokens: 0, loading: true });
+    const nr: ComparisonResult[] = versions.map(v => ({ label: v.description || v.id, text: "", tokens: 0, loading: true }));
     setResults([...nr]);
 
     const run = (v: PromptVersion, idx: number) =>
@@ -132,7 +142,7 @@ export function Playground() {
         .then((r) => { nr[idx] = { ...nr[idx], text: r.text, tokens: r.tokens, loading: false }; setResults([...nr]); })
         .catch((e: any) => { nr[idx] = { ...nr[idx], loading: false, error: e.message }; setResults([...nr]); });
 
-    await Promise.all([run(vA, 0), ...(vB ? [run(vB, 1)] : [])]);
+    await Promise.all(versions.map((v, i) => run(v, i)));
     setRunning(false);
   }
 
@@ -172,9 +182,6 @@ export function Playground() {
     setDeleteMode(false);
     setDeleting(false);
   }
-
-  const selA = versionOptions.find((o) => o.version.id === promptA);
-  const selB = versionOptions.find((o) => o.version.id === promptB);
 
   return (
     <div className="flex h-dvh flex-col bg-background">
@@ -304,37 +311,45 @@ export function Playground() {
           {/* TOP: Prompt 선택 + Query/Context */}
           <div className="shrink-0 border-b">
             {/* Prompt 선택 바 */}
-            <div className="flex items-end gap-4 px-6 pt-4 pb-3">
-              <div className="flex-1 min-w-0">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prompt A</label>
-                  {selA && (
-                    <button onClick={() => setEditTarget({ promptName: selA.promptName, version: selA.version })}
-                      className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                  )}
+            <div className="flex items-end gap-3 px-6 pt-4 pb-3">
+              <div className="flex flex-1 min-w-0 gap-3 flex-wrap">
+                {promptIds.map((id, idx) => {
+                  const sel = versionOptions.find((o) => o.version.id === id);
+                  return (
+                    <div key={idx} className="flex-1 min-w-[180px]">
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                          Prompt {idx + 1}/{promptIds.length}
+                        </label>
+                        <div className="flex items-center gap-1">
+                          {sel && (
+                            <button onClick={() => setEditTarget({ promptName: sel.promptName, version: sel.version })}
+                              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          )}
+                          {promptIds.length > 1 && (
+                            <button onClick={() => removePrompt(idx)}
+                              className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-0.5">
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <select value={id} onChange={(e) => updatePrompt(idx, e.target.value)}
+                        className="h-9 w-full rounded-lg border bg-background px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-ring/40">
+                        {versionOptions.map((o) => <option key={o.version.id} value={o.version.id}>{o.label}</option>)}
+                      </select>
+                    </div>
+                  );
+                })}
+                <div className="flex flex-col justify-end pb-0.5">
+                  <button onClick={addPrompt}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border bg-background text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                    title="Add prompt">
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
-                <select value={promptA} onChange={(e) => setPromptA(e.target.value)}
-                  className="h-9 w-full rounded-lg border bg-background px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-ring/40">
-                  {versionOptions.map((o) => <option key={o.version.id} value={o.version.id}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prompt B</label>
-                  {selB && (
-                    <button onClick={() => setEditTarget({ promptName: selB.promptName, version: selB.version })}
-                      className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-                <select value={promptB} onChange={(e) => setPromptB(e.target.value)}
-                  className="h-9 w-full rounded-lg border bg-background px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-ring/40">
-                  <option value="">— none —</option>
-                  {versionOptions.map((o) => <option key={o.version.id} value={o.version.id}>{o.label}</option>)}
-                </select>
               </div>
               <button onClick={handleRun} disabled={running || !editQuery.trim()}
                 className="h-9 shrink-0 flex items-center gap-2 rounded-lg bg-primary px-5 text-[13px] font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-35 disabled:cursor-not-allowed">
@@ -383,13 +398,10 @@ export function Playground() {
               </div>
             ) : (
               <div className="h-full px-6 py-4">
-                <div className={`grid h-full gap-4 ${
-                  results.length === 0
-                    ? selected ? "grid-cols-1" : "grid-cols-1"
-                    : results.length === 1
-                      ? selected ? "grid-cols-2" : "grid-cols-1"
-                      : selected ? "grid-cols-3" : "grid-cols-2"
-                }`}>
+                <div
+                  className="grid h-full gap-4"
+                  style={{ gridTemplateColumns: `repeat(${(selected ? 1 : 0) + results.length}, minmax(0, 1fr))` }}
+                >
                   {/* Original (only if trace selected) */}
                   {selected && (
                     <div className="flex flex-col rounded-xl border">
@@ -409,7 +421,7 @@ export function Playground() {
                       <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2.5">
                         <div className="flex items-center gap-2">
                           <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/10 text-[10px] font-bold text-primary">
-                            {i === 0 ? "A" : "B"}
+                            {i + 1}
                           </span>
                           <span className="text-xs font-semibold">{r.label}</span>
                         </div>
