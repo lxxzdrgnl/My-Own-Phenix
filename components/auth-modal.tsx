@@ -31,15 +31,15 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleCancel()}>
       <DialogContent className="sm:max-w-sm">
-        <DialogTitle>로그인 필요</DialogTitle>
+        <DialogTitle>Sign in required</DialogTitle>
         <DialogDescription>
-          로그인이 필요한 서비스입니다.
+          You need to sign in to use this feature.
         </DialogDescription>
         <DialogFooter className="flex gap-2 sm:justify-end">
           <Button variant="outline" onClick={handleCancel}>
-            취소
+            Cancel
           </Button>
-          <Button onClick={handleConfirm}>확인</Button>
+          <Button onClick={handleConfirm}>Sign in</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

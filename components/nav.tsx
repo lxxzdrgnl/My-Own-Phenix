@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   MessageSquare,
   FlaskConical,
-  FileText,
   FolderOpen,
   LayoutDashboard,
   LogOut,
@@ -19,7 +18,6 @@ import { AuthModal } from "@/components/auth-modal";
 const links = [
   { href: "/", label: "Chat", icon: MessageSquare, public: true },
   { href: "/playground", label: "Playground", icon: FlaskConical, public: false },
-  { href: "/prompts", label: "Prompts", icon: FileText, public: false },
   { href: "/projects", label: "Projects", icon: FolderOpen, public: false },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, public: false },
 ];
@@ -49,7 +47,7 @@ export function Nav() {
     <>
       <AuthModal open={showAuthModal} onClose={handleModalClose} />
       <nav className="flex items-center gap-1 border-b px-3 py-2">
-        <Link href="/" className="mr-3 text-sm font-bold tracking-tight hover:opacity-80 transition-opacity">
+        <Link href="/" className="mr-3 text-lg font-bold tracking-tight hover:opacity-80 transition-opacity">
           My Own Phenix
         </Link>
         {links.map(({ href, label, icon: Icon, public: isPublic }) => {
@@ -60,13 +58,13 @@ export function Nav() {
               key={href}
               href={href}
               onClick={!isPublic ? handleProtectedClick : undefined}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-base font-medium transition-colors ${
                 active
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
-              <Icon className="h-3.5 w-3.5" />
+              <Icon className="h-4 w-4" />
               {label}
             </Link>
           );
@@ -74,10 +72,10 @@ export function Nav() {
         {user && (
           <button
             onClick={() => signOut(auth)}
-            className="ml-auto flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="ml-auto flex items-center gap-1.5 rounded-md px-3 py-1.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <LogOut className="h-3.5 w-3.5" />
-            로그아웃
+            <LogOut className="h-4 w-4" />
+            Sign out
           </button>
         )}
       </nav>
