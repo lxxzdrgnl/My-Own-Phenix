@@ -29,8 +29,8 @@ export default function LoginPage() {
     <div className="flex h-dvh items-center justify-center">
       <div className="flex flex-col items-center gap-6 rounded-2xl border p-10">
         <h1 className="text-2xl font-semibold">My Own Phenix</h1>
-        <p className="text-muted-foreground text-sm">
-          로그인하여 서비스를 이용하세요
+        <p className="text-muted-foreground text-base">
+          Sign in to get started
         </p>
         <Button
           size="lg"
@@ -56,7 +56,7 @@ export default function LoginPage() {
               fill="#EA4335"
             />
           </svg>
-          Google로 로그인
+          Sign in with Google
         </Button>
       </div>
     </div>

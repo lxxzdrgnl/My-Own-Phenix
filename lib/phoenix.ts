@@ -378,14 +378,10 @@ export async function deletePrompt(name: string): Promise<void> {
 }
 
 export async function deleteTrace(traceId: string): Promise<void> {
-  const res = await fetch(
+  await fetch(
     `/api/phoenix?path=/v1/traces/${encodeURIComponent(traceId)}`,
     { method: "DELETE" },
   );
-  if (!res.ok && res.status !== 404) {
-    const err = await res.text();
-    throw new Error(err);
-  }
 }
 
 export async function callLLM(
