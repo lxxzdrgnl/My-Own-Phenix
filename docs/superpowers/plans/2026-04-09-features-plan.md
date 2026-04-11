@@ -95,8 +95,8 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
 Append to `.env.local`:
 ```
 NEXT_PUBLIC_FIREBASE_API_KEY=YOUR_FIREBASE_API_KEY
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=my-own-phenix.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=my-own-phenix
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
 ```
 
 - [ ] **Step 3: Create `lib/firebase.ts`**
