@@ -16,6 +16,7 @@ import { createThread, sendMessage } from "@/lib/chatApi";
 import { Thread } from "@/components/assistant-ui/thread";
 import { Nav } from "@/components/nav";
 import { useAuth } from "@/lib/auth-context";
+import { ProjectSelector } from "@/components/project-selector";
 
 const attachmentAdapter = new CompositeAttachmentAdapter([
   new SimpleImageAttachmentAdapter(),
@@ -35,7 +36,14 @@ interface HistoryMessage {
   content: string;
 }
 
-export function Assistant() {
+interface AssistantProps {
+  project?: string;
+  projects?: { id: string; name: string }[];
+  onProjectChange?: (project: string) => void;
+  onProjectAdd?: (name: string) => void;
+}
+
+export function Assistant({ project = "default", projects = [], onProjectChange, onProjectAdd }: AssistantProps) {
   const { user } = useAuth();
   const threadIdRef = useRef<string | null>(null);
   const activeDbIdRef = useRef<string | null>(null);
@@ -48,7 +56,9 @@ export function Assistant() {
   const [threads, setThreads] = useState<DbThread[]>([]);
   const [activeThreadDbId, setActiveThreadDbId] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
+  const historySentRef = useRef(false);
   const [runtimeKey, setRuntimeKey] = useState(0);
+  const [isFadingOut, setIsFadingOut] = useState(false);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -58,13 +68,13 @@ export function Assistant() {
   const refreshThreads = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/user-threads?userId=${user.uid}`);
+      const res = await fetch(`/api/user-threads?userId=${user.uid}&project=${encodeURIComponent(project)}`);
       if (res.ok) {
         const data = await res.json();
         setThreads(data.threads ?? []);
       }
     } catch {}
-  }, [user]);
+  }, [user, project]);
 
   useEffect(() => {
     if (user) {
@@ -73,6 +83,14 @@ export function Assistant() {
       setThreads([]);
     }
   }, [user, refreshThreads]);
+
+  // Reset chat state when project changes
+  const prevProjectRef = useRef(project);
+  if (prevProjectRef.current !== project) {
+    prevProjectRef.current = project;
+    threadIdRef.current = null;
+    activeDbIdRef.current = null;
+  }
 
   // Save a message to Prisma
   const saveMessage = useCallback(async (threadDbId: string, role: string, content: string) => {
@@ -104,8 +122,8 @@ export function Assistant() {
                     .filter((p: unknown) => (p as { type: string }).type === "text")
                     .map((p: unknown) => (p as { text: string }).text)
                     .join(" ")
-                : "새 대화";
-          const title = rawText.slice(0, 30) || "새 대화";
+                : "New Chat";
+          const title = rawText.slice(0, 30) || "New Chat";
 
           try {
             const res = await fetch("/api/user-threads", {
@@ -115,6 +133,7 @@ export function Assistant() {
                 userId: user.uid,
                 langGraphThreadId: thread_id,
                 title,
+                project,
               }),
             });
             const data = await res.json();
@@ -143,22 +162,21 @@ export function Assistant() {
         saveMessage(activeDbIdRef.current, "user", userText);
       }
 
-      // Send all history + new message to LangGraph for context
-      const allMessages = [
-        ...history.map((m) => ({
-          type: m.role === "user" ? "human" : "assistant",
-          content: m.content,
-        })),
-        ...messages.slice(-1),
-      ];
-
-      // 새 메시지를 보내면 히스토리를 비움 (runtime이 이후 메시지를 관리)
-      setHistory([]);
+      // Send history + new message to LangGraph for context (only on first message)
+      const historyMessages = historySentRef.current
+        ? []
+        : history.map((m) => ({
+            type: m.role === "user" ? "human" : "assistant",
+            content: m.content,
+          }));
+      const allMessages = [...historyMessages, ...messages.slice(-1)];
+      historySentRef.current = true;
 
       const generator = await sendMessage({
         threadId: threadIdRef.current,
         messages: allMessages,
         command,
+        project,
       });
 
       let assistantResponse = "";
@@ -188,35 +206,42 @@ export function Assistant() {
   });
 
   const handleSelectThread = useCallback(async (thread: DbThread) => {
-    // 먼저 현재 화면 비우고 runtime 리마운트
+    setIsFadingOut(true);
+
+    // fade-out 애니메이션과 메시지 로딩을 병렬 처리
+    const messagesPromise = fetch(`/api/user-threads/${thread.id}/messages`)
+      .then((res) => (res.ok ? res.json() : { messages: [] }))
+      .catch(() => ({ messages: [] }));
+
+    const [data] = await Promise.all([
+      messagesPromise,
+      new Promise((resolve) => setTimeout(resolve, 150)),
+    ]);
+
+    const loadedMessages = (data.messages ?? []).map((m: any) => ({
+      id: m.id,
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+
     threadIdRef.current = thread.langGraphThreadId;
     setActiveThreadDbId(thread.id);
-    setHistory([]);
+    setHistory(loadedMessages);
+    historySentRef.current = false;
     setRuntimeKey((k) => k + 1);
-
-    // 그 다음 메시지 로드
-    try {
-      const res = await fetch(`/api/user-threads/${thread.id}/messages`);
-      if (res.ok) {
-        const data = await res.json();
-        setHistory(
-          (data.messages ?? []).map((m: any) => ({
-            id: m.id,
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })),
-        );
-      }
-    } catch {
-      setHistory([]);
-    }
+    setIsFadingOut(false);
   }, []);
 
   const handleNewChat = useCallback(() => {
-    threadIdRef.current = null;
-    setActiveThreadDbId(null);
-    setHistory([]);
-    setRuntimeKey((k) => k + 1);
+    setIsFadingOut(true);
+    setTimeout(() => {
+      threadIdRef.current = null;
+      setActiveThreadDbId(null);
+      setHistory([]);
+      historySentRef.current = false;
+      setRuntimeKey((k) => k + 1);
+      setIsFadingOut(false);
+    }, 150);
   }, []);
 
   const handleDeleteThread = useCallback(
@@ -235,7 +260,7 @@ export function Assistant() {
   );
 
   return (
-    <AssistantRuntimeProvider key={runtimeKey} runtime={runtime}>
+    <AssistantRuntimeProvider key={`${project}-${runtimeKey}`} runtime={runtime}>
       <div className="flex h-dvh flex-col">
         <Nav />
         <div className="flex flex-1 min-h-0">
@@ -243,7 +268,7 @@ export function Assistant() {
           {user && sidebarOpen && (
             <div className="flex w-64 flex-col border-r bg-muted/30 shrink-0">
               <div className="flex items-center justify-between px-3 py-2 border-b">
-                <span className="text-sm font-semibold">대화 기록</span>
+                <span className="text-sm font-semibold">Chat History</span>
                 <button
                   onClick={() => { setSidebarOpen(false); localStorage.setItem("sidebar_open", "false"); }}
                   className="rounded p-1 hover:bg-muted transition-colors"
@@ -251,19 +276,28 @@ export function Assistant() {
                   <PanelLeftClose className="h-4 w-4" />
                 </button>
               </div>
+              <div className="px-2 pt-2">
+                <ProjectSelector
+                  project={project}
+                  projects={projects}
+                  onChange={(name) => onProjectChange?.(name)}
+                  onAdd={onProjectAdd}
+                  size="sm"
+                />
+              </div>
               <div className="px-2 py-2">
                 <button
                   onClick={handleNewChat}
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
                 >
                   <Plus className="h-4 w-4" />
-                  새 대화
+                  New Chat
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
                 {threads.length === 0 && (
-                  <p className="px-3 py-2 text-xs text-muted-foreground">
-                    대화 기록이 없습니다.
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
+                    No conversations yet.
                   </p>
                 )}
                 {threads.map((thread) => (
@@ -297,7 +331,7 @@ export function Assistant() {
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 >
                   <LogOut className="h-4 w-4" />
-                  로그아웃
+                  Sign out
                 </button>
               </div>
             </div>
@@ -313,39 +347,8 @@ export function Assistant() {
           )}
 
           {/* Main chat area */}
-          <div className="flex-1 min-h-0 flex flex-col">
-            {/* 이전 대화 히스토리 */}
-            {history.length > 0 && (
-              <div className="flex-shrink-0 overflow-y-auto">
-                <div className="mx-auto max-w-[44rem] px-4 pt-4">
-                  {history.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={
-                        msg.role === "user"
-                          ? "mx-auto w-full max-w-[44rem] grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 py-3 [&:where(>*)]:col-start-2"
-                          : "mx-auto w-full max-w-[44rem] py-3"
-                      }
-                    >
-                      {msg.role === "user" ? (
-                        <div className="col-start-2 min-w-0">
-                          <div className="wrap-break-word rounded-2xl bg-muted px-4 py-2.5 text-foreground">
-                            {msg.content}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="wrap-break-word px-2 text-foreground leading-relaxed whitespace-pre-wrap">
-                          {msg.content}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="flex-1 min-h-0">
-              <Thread showWelcome={history.length === 0} />
-            </div>
+          <div className="flex-1 min-h-0">
+            <Thread showWelcome={history.length === 0} historyMessages={history} isFadingOut={isFadingOut} />
           </div>
         </div>
       </div>
