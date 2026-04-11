@@ -215,7 +215,7 @@ export function ModelSelector({
         {currentProvider && (
           <ProviderIcon icon={currentProvider.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}
-        <span className="flex-1 truncate text-left font-mono text-[13px]">{value}</span>
+        <span className="flex-1 truncate text-left font-mono text-sm">{value}</span>
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
@@ -249,7 +249,7 @@ export function ModelSelector({
                   <div key={provider.name}>
                     <div className="flex items-center gap-2 px-3 pt-2 pb-1">
                       <ProviderIcon icon={provider.icon} className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                         {provider.name}
                       </span>
                     </div>
@@ -262,7 +262,7 @@ export function ModelSelector({
                           setOpen(false);
                           setSearch("");
                         }}
-                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-[12px] transition-colors
+                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-sm transition-colors
                           ${provider.disabled
                             ? "cursor-not-allowed opacity-30"
                             : m.id === value
@@ -297,7 +297,7 @@ export function ModelSelector({
                       className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${isProviderExpanded ? "rotate-90" : ""}`}
                     />
                     <ProviderIcon icon={provider.icon} className="h-3.5 w-3.5 shrink-0" />
-                    <span className="text-[13px] font-medium">{provider.name}</span>
+                    <span className="text-sm font-medium">{provider.name}</span>
                   </button>
 
                   {/* Families */}
@@ -318,10 +318,10 @@ export function ModelSelector({
                             <ChevronRight
                               className={`h-2.5 w-2.5 shrink-0 text-muted-foreground transition-transform ${isFamilyExpanded ? "rotate-90" : ""}`}
                             />
-                            <span className="text-[12px] text-muted-foreground">
+                            <span className="text-sm text-muted-foreground">
                               {family.label}
                             </span>
-                            <span className="ml-auto text-[9px] tabular-nums text-muted-foreground/50">
+                            <span className="ml-auto text-[11px] tabular-nums text-muted-foreground/50">
                               {family.models.length}
                             </span>
                           </button>
@@ -336,7 +336,7 @@ export function ModelSelector({
                                   setOpen(false);
                                   setSearch("");
                                 }}
-                                className={`flex w-full items-center py-1.5 pl-14 pr-3 text-left font-mono text-[12px] transition-colors
+                                className={`flex w-full items-center py-1.5 pl-14 pr-3 text-left font-mono text-sm transition-colors
                                   ${m.id === value
                                     ? "bg-foreground/8 font-medium"
                                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
