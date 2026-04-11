@@ -29,6 +29,7 @@ export const sendMessage = async (params: {
   threadId: string;
   messages?: LangChainMessage[];
   command?: LangGraphCommand | undefined;
+  project?: string;
 }) => {
   const client = createClient();
   const assistantId = process.env["NEXT_PUBLIC_LANGGRAPH_ASSISTANT_ID"];
@@ -50,6 +51,9 @@ export const sendMessage = async (params: {
         : null,
       command: params.command,
       streamMode: ["messages"],
+      ...(params.project && params.project !== "default"
+        ? { config: { configurable: { project_name: params.project } }, metadata: { project_name: params.project } }
+        : {}),
     },
   );
 };
