@@ -27,6 +27,7 @@ import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
 import { cn } from "@/lib/utils";
+import { MessageFeedback } from "@/components/chat/message-feedback";
 
 // ─── Shared style constants ───────────────────────────────────────────────────
 
@@ -49,12 +50,17 @@ export const HistoryUserMessage: FC<{ content: string }> = ({ content }) => (
   </div>
 );
 
-export const HistoryAssistantMessage: FC<{ content: string }> = ({ content }) => (
+export const HistoryAssistantMessage: FC<{
+  messageId: string;
+  content: string;
+  feedbackValue?: "up" | "down" | null;
+}> = ({ messageId, content, feedbackValue }) => (
   <div
     className="relative mx-auto w-full max-w-(--thread-max-width) py-3"
     data-role="assistant"
   >
     <div className={cn(ASSISTANT_BODY_CLS, "whitespace-pre-wrap")}>{content}</div>
+    <MessageFeedback messageId={messageId} content={content} initialValue={feedbackValue} />
   </div>
 );
 

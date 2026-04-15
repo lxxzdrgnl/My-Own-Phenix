@@ -58,3 +58,38 @@ New UI must use the shared components in `components/ui/`. Do NOT inline duplica
 - Korean locale (`ko-KR`) for date formatting
 - `"use client"` directive on all interactive components
 - Prefer `useCallback` for async data-loading functions passed to `useEffect`
+
+## Architecture Overview
+
+### Dashboard (`app/dashboard/page.tsx`)
+- Multi-project support with `ProjectSelector`
+- Draggable `WidgetGrid` using react-grid-layout
+- 17 widgets in 3 categories: Evaluation, Performance, Tokens & Cost
+- Widget registry at `components/dashboard/widgets/registry.tsx`
+- Layout persistence per user+project via Prisma (`app/api/dashboard/layout/route.ts`)
+
+### Projects View (`app/projects/projects-manager.tsx`)
+- Left sidebar: project list with reorder
+- Center panel: traces, charts, stat cards
+- Filters: annotation status, latency bands, full-text search
+
+### Phoenix Data Flow
+- Proxy: `app/api/phoenix/route.ts` → Phoenix server
+- Client: `lib/phoenix.ts` (fetchProjects, fetchTraces, fetchPrompts, etc.)
+- Spans fetched from `/v1/projects/{name}/spans`, annotations from `/v1/projects/{name}/span_annotations`
+- Dashboard utils: `lib/dashboard-utils.ts` (groupByDate, hourlyBuckets, calcCost, etc.)
+
+### Evaluation Pipeline (external: `legal-rag-self-improve-demo/`)
+- 4 evals uploaded to Phoenix as span annotations:
+  - `hallucination` (LLM-based, HallucinationEvaluator)
+  - `qa_correctness` (LLM-based, QAEvaluator)
+  - `rag_relevance` (LLM-based, RelevanceEvaluator)
+  - `banned_word` (CODE-based, keyword match)
+- Inline eval (real-time in graph) + polling worker (every 15s) + backfill on startup
+- Annotations have: name, label, score (0-1), explanation
+
+### Key Data Types
+- `SpanData`: latency, status, time, promptTokens, completionTokens, totalTokens, model, spanKind
+- `AnnotationData`: name, label, score, time
+- `WidgetConfig`: id, type, title
+- `WidgetViewMode`: "summary" | "trend" | "detail"

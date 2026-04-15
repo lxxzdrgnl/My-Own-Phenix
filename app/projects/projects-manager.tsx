@@ -7,6 +7,7 @@ import { HighchartWidget } from "@/components/dashboard/widgets/highchart-widget
 import { MeasureGrid } from "@/components/dashboard/widgets/measure-grid";
 import { RmfFunctionCards } from "@/components/dashboard/widgets/rmf-function-card";
 import { GapAnalysis, type GapDataItem } from "@/components/dashboard/widgets/gap-analysis";
+import { ManageView } from "@/components/dashboard/widgets/manage-view";
 import { computeMetrics } from "@/lib/rmf-utils";
 import type { AnnotationData, SpanData } from "@/lib/dashboard-utils";
 import { AnnotationBadges } from "@/components/annotation-badge";
@@ -606,8 +607,8 @@ export function ProjectsManager() {
                 )}
 
                 {/* Risk tab */}
-                {activeTab === "risk" && (
-                  <div className="text-muted-foreground text-center py-12">리스크 관리 탭 준비 중</div>
+                {activeTab === "risk" && selectedProject && (
+                  <ManageView projectId={selectedProject} />
                 )}
               </div>
             </div>

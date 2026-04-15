@@ -16,6 +16,7 @@ export interface HistoryMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  feedbackValue?: "up" | "down" | null;
 }
 
 export const Thread: FC<{
@@ -51,7 +52,7 @@ export const Thread: FC<{
                 msg.role === "user" ? (
                   <HistoryUserMessage key={msg.id} content={msg.content} />
                 ) : (
-                  <HistoryAssistantMessage key={msg.id} content={msg.content} />
+                  <HistoryAssistantMessage key={msg.id} messageId={msg.id} content={msg.content} feedbackValue={msg.feedbackValue} />
                 ),
               )}
             </div>

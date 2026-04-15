@@ -7,10 +7,20 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const messages = await prisma.message.findMany({
+  const rawMessages = await prisma.message.findMany({
     where: { threadId: id },
     orderBy: { createdAt: "asc" },
+    include: { feedback: true },
   });
+
+  const messages = rawMessages.map((m) => ({
+    id: m.id,
+    threadId: m.threadId,
+    role: m.role,
+    content: m.content,
+    createdAt: m.createdAt,
+    feedbackValue: m.feedback?.[0]?.value ?? null,
+  }));
 
   return NextResponse.json({ messages });
 }

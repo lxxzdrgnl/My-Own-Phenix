@@ -34,6 +34,7 @@ interface HistoryMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  feedbackValue?: "up" | "down" | null;
 }
 
 interface AssistantProps {
@@ -166,7 +167,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
       const historyMessages = historySentRef.current
         ? []
         : history.map((m) => ({
-            type: m.role === "user" ? "human" : "assistant",
+            type: m.role === "user" ? ("human" as const) : ("ai" as const),
             content: m.content,
           }));
       const allMessages = [...historyMessages, ...messages.slice(-1)];
@@ -222,6 +223,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
       id: m.id,
       role: m.role as "user" | "assistant",
       content: m.content,
+      feedbackValue: m.feedbackValue ?? null,
     }));
 
     threadIdRef.current = thread.langGraphThreadId;
