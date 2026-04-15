@@ -86,3 +86,10 @@ model DashboardLayout {
 
   @@unique([userId, project])
 }
+
+model EvalPrompt {
+  id        String   @id @default(cuid())
+  name      String   @unique  // "hallucination", "citation", "tool_calling"
+  template  String            // the full prompt template
+  updatedAt DateTime @updatedAt
+}

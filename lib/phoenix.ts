@@ -7,6 +7,13 @@ export interface Trace {
   context: string;
   response: string;
   annotations: Annotation[];
+  // Span metadata for MEASURE metrics
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  model: string;
+  status: string;
+  spanKind: string;
 }
 
 export interface Annotation {
@@ -225,6 +232,12 @@ export async function fetchTraces(
       context,
       response,
       annotations: merged,
+      promptTokens: Number(s.attributes?.["llm.token_count.prompt"] ?? 0),
+      completionTokens: Number(s.attributes?.["llm.token_count.completion"] ?? 0),
+      totalTokens: Number(s.attributes?.["llm.token_count.total"] ?? 0),
+      model: String(s.attributes?.["llm.model_name"] ?? ""),
+      status: String(s.status_code ?? "OK"),
+      spanKind: String(s.span_kind ?? ""),
     });
   }
 

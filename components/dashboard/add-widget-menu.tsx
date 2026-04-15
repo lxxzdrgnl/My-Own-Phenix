@@ -22,16 +22,36 @@ import {
   Hash,
   LayoutGrid,
   Table2,
+  ThumbsDown,
+  Wrench,
+  ShieldCheck,
+  BookOpen,
 } from "lucide-react";
 
 export const WIDGET_GROUPS = [
   {
+    label: "RMF MEASURE",
+    items: [
+      { type: "rmf_overview",           title: "RMF Overview",           icon: LayoutGrid },
+      { type: "rmf_measure_grid",       title: "MEASURE Metric Grid",    icon: Table2 },
+      // 12 individual MEASURE metrics
+      { type: "hallucination",          title: "Hallucination Rate",     icon: TrendingUp },
+      { type: "banned_word",            title: "Toxicity Rate",          icon: Ban },
+      { type: "qa_correctness",         title: "QA Accuracy",            icon: CheckCircle2 },
+      { type: "rag_relevance",          title: "Retrieval Relevance",    icon: FileSearch },
+      { type: "avg_latency",            title: "Latency P95",            icon: Clock },
+      { type: "error_rate",             title: "Error Rate",             icon: AlertTriangle },
+      { type: "token_usage",            title: "Token Efficiency",       icon: Coins },
+      { type: "token_cost",             title: "Cost Tracking",          icon: DollarSign },
+      { type: "rmf_user_frustration",   title: "User Frustration",       icon: ThumbsDown },
+      { type: "rmf_tool_calling",       title: "Tool Calling Score",     icon: Wrench },
+      { type: "rmf_guardrail_trigger",  title: "Guardrail Trigger",      icon: ShieldCheck },
+      { type: "rmf_citation_accuracy",  title: "Citation Accuracy",      icon: BookOpen },
+    ],
+  },
+  {
     label: "Evaluation",
     items: [
-      { type: "hallucination", title: "Hallucination Rate", icon: TrendingUp },
-      { type: "qa_correctness", title: "QA Correctness", icon: CheckCircle2 },
-      { type: "rag_relevance", title: "RAG Relevance", icon: FileSearch },
-      { type: "banned_word", title: "Banned Word Detection", icon: Ban },
       { type: "score_comparison", title: "Score Comparison", icon: GitCompare },
       { type: "annotation_scores", title: "Annotation Scores", icon: BarChart3 },
     ],
@@ -40,8 +60,6 @@ export const WIDGET_GROUPS = [
     label: "Performance",
     items: [
       { type: "total_queries", title: "Total Queries", icon: Activity },
-      { type: "avg_latency", title: "Avg Response Time", icon: Clock },
-      { type: "error_rate", title: "Error Rate", icon: AlertTriangle },
       { type: "latency_distribution", title: "Latency Distribution", icon: BarChart3 },
       { type: "queries_timeline", title: "Queries Timeline", icon: CalendarClock },
       { type: "throughput", title: "Throughput (tok/s)", icon: Gauge },
@@ -50,18 +68,9 @@ export const WIDGET_GROUPS = [
   {
     label: "Tokens & Cost",
     items: [
-      { type: "token_usage", title: "Token Usage", icon: Coins },
-      { type: "token_cost", title: "Estimated Cost", icon: DollarSign },
       { type: "token_ratio", title: "Input/Output Ratio", icon: ArrowLeftRight },
       { type: "avg_tokens_per_call", title: "Avg Tokens/Call", icon: Hash },
       { type: "model_distribution", title: "Model Distribution", icon: Cpu },
-    ],
-  },
-  {
-    label: "RMF",
-    items: [
-      { type: "rmf_overview", title: "RMF Overview", icon: LayoutGrid },
-      { type: "rmf_measure_grid", title: "MEASURE 지표 그리드", icon: Table2 },
     ],
   },
 ] as const;

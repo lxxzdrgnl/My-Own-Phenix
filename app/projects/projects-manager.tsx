@@ -8,7 +8,7 @@ import { MeasureGrid } from "@/components/dashboard/widgets/measure-grid";
 import { RmfFunctionCards } from "@/components/dashboard/widgets/rmf-function-card";
 import { GapAnalysis, type GapDataItem } from "@/components/dashboard/widgets/gap-analysis";
 import { ManageView } from "@/components/dashboard/widgets/manage-view";
-import { computeMetrics } from "@/lib/rmf-utils";
+import { computeMetrics, type FeedbackStats } from "@/lib/rmf-utils";
 import type { AnnotationData, SpanData } from "@/lib/dashboard-utils";
 import { AnnotationBadges } from "@/components/annotation-badge";
 import { cn } from "@/lib/utils";
@@ -286,24 +286,38 @@ export function ProjectsManager() {
   const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   const hasAnnotations = scores.length > 0;
 
+  // Feedback stats for frustration metric
+  const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | undefined>();
+  const loadFeedbackStats = useCallback(async () => {
+    if (!selectedProject) return;
+    try {
+      const res = await fetch(`/api/feedback/stats?project=${encodeURIComponent(selectedProject)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFeedbackStats({ total: data.totalResponses, downCount: data.downCount });
+      }
+    } catch {}
+  }, [selectedProject]);
+  useEffect(() => { loadFeedbackStats(); }, [loadFeedbackStats]);
+
   // RMF / MEASURE tab metrics
   const rmfMetrics = useMemo(() => {
-    if (!traces.length) return computeMetrics([], []);
+    if (!traces.length) return computeMetrics([], [], feedbackStats);
     const annData: AnnotationData[] = traces.flatMap((t) =>
       (t.annotations || []).map((a) => ({ ...a, time: t.time }))
     );
     const spanData: SpanData[] = traces.map((t) => ({
       latency: t.latency,
-      status: "OK",
+      status: t.status || "OK",
       time: t.time,
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-      model: "",
-      spanKind: "LLM",
+      promptTokens: t.promptTokens || 0,
+      completionTokens: t.completionTokens || 0,
+      totalTokens: t.totalTokens || 0,
+      model: t.model || "",
+      spanKind: t.spanKind || "LLM",
     }));
-    return computeMetrics(spanData, annData);
-  }, [traces]);
+    return computeMetrics(spanData, annData, feedbackStats);
+  }, [traces, feedbackStats]);
 
   const measureScore = useMemo(() => {
     const greenCount = rmfMetrics.filter((m) => m.status === "green").length;

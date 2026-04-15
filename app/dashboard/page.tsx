@@ -39,7 +39,7 @@ function fixLayoutMins(layouts: LayoutItem[], widgets: WidgetConfig[]): LayoutIt
   });
 }
 
-const LARGE_MIN_TYPES = new Set(["token_cost", "score_comparison", "annotation_scores"]);
+const LARGE_MIN_TYPES = new Set(["score_comparison", "annotation_scores"]);
 
 const widgetMinSize = (type: string) =>
   LARGE_MIN_TYPES.has(type) ? { minW: 2, minH: 1 } : { minW: 1, minH: 1 };

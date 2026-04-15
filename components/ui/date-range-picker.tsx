@@ -3,7 +3,7 @@
 import * as React from "react";
 import { CalendarDays } from "lucide-react";
 import { DayPicker, type DateRange as DayPickerDateRange } from "react-day-picker";
-import { ko } from "date-fns/locale";
+import { enUS } from "date-fns/locale";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,14 +26,14 @@ export function getPresetRange(days: number): DateRange {
   return { from, to };
 }
 
-function formatDateKo(date: Date): string {
-  return date.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+function formatDateEn(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 const PRESETS = [
-  { label: "오늘", days: 1 },
-  { label: "7일", days: 7 },
-  { label: "30일", days: 30 },
+  { label: "Today", days: 1 },
+  { label: "7 Days", days: 7 },
+  { label: "30 Days", days: 30 },
 ] as const;
 
 function detectPreset(range: DateRange): string | null {
@@ -85,7 +85,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
 
   const displayLabel = activePreset
     ? activePreset
-    : `${formatDateKo(value.from)} – ${formatDateKo(value.to)}`;
+    : `${formatDateEn(value.from)} – ${formatDateEn(value.to)}`;
 
   function handlePreset(days: number) {
     onChange(getPresetRange(days));
@@ -139,7 +139,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
         >
           <DayPicker
             mode="range"
-            locale={ko}
+            locale={enUS}
             selected={selecting}
             onSelect={handleSelect}
             numberOfMonths={2}

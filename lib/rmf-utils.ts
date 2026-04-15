@@ -42,7 +42,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "hallucination_rate",
     label: "환각률",
     engLabel: "Hallucination Eval",
-    description: "LLM이 사실과 다른 정보를 생성하는 비율. 금융/의료 AI에서 가장 위험한 지표.",
+    description: "Rate of LLM generating information contradicting facts. Critical for finance/medical AI.",
     unit: "%",
     lowerIsBetter: true,
     threshold: {
@@ -54,7 +54,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "toxicity_rate",
     label: "독성률",
     engLabel: "Toxicity Eval",
-    description: "유해하거나 편향된 콘텐츠 생성 비율. 소비자 대면 AI에서 필수 모니터링.",
+    description: "Rate of harmful or biased content generation. Essential monitoring for consumer-facing AI.",
     unit: "%",
     lowerIsBetter: true,
     threshold: {
@@ -66,7 +66,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "qa_accuracy",
     label: "답변 정확도",
     engLabel: "QA Eval",
-    description: "질문에 대한 답변의 정확성. 핵심 품질 지표.",
+    description: "Answer accuracy for questions. Core quality metric.",
     unit: "%",
     lowerIsBetter: false,
     threshold: {
@@ -78,7 +78,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "retrieval_relevance",
     label: "검색 관련성",
     engLabel: "Relevance Eval",
-    description: "검색된 문서의 질문 관련성. RAG 파이프라인 핵심.",
+    description: "Retrieved document relevance to query. Core RAG pipeline metric.",
     unit: "%",
     lowerIsBetter: false,
     threshold: {
@@ -90,7 +90,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "latency_p95",
     label: "응답 지연시간",
     engLabel: "Span Duration",
-    description: "95번째 백분위 응답 시간. 사용자 경험과 SLA 준수 기준.",
+    description: "95th percentile response time. User experience and SLA compliance.",
     unit: "s",
     lowerIsBetter: true,
     threshold: {
@@ -102,7 +102,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "error_rate",
     label: "에러율",
     engLabel: "status_code",
-    description: "API 호출 실패 비율. 서비스 안정성과 직결.",
+    description: "API call failure rate. Directly impacts service reliability.",
     unit: "%",
     lowerIsBetter: true,
     threshold: {
@@ -114,7 +114,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "token_efficiency",
     label: "토큰 효율성",
     engLabel: "token_count",
-    description: "호출당 평균 토큰 수. 비용 최적화 지표.",
+    description: "Average tokens per call. Cost optimization metric.",
     unit: "avg",
     lowerIsBetter: true,
     threshold: {
@@ -126,7 +126,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "cost_tracking",
     label: "비용 추적",
     engLabel: "llm.cost.total",
-    description: "일일 LLM API 비용. 예산 관리 핵심.",
+    description: "Daily LLM API cost. Budget management essential.",
     unit: "$/day",
     lowerIsBetter: true,
     threshold: {
@@ -138,7 +138,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "user_frustration",
     label: "사용자 불만도",
     engLabel: "Frustration Eval",
-    description: "사용자가 싫어요를 누른 응답 비율.",
+    description: "Rate of responses receiving negative user feedback.",
     unit: "%",
     lowerIsBetter: true,
     threshold: {
@@ -150,19 +150,19 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "tool_calling_accuracy",
     label: "도구 호출 정확도",
     engLabel: "Tool Calling Eval",
-    description: "도구/함수 호출의 성공률.",
+    description: "Tool/function call success rate.",
     unit: "%",
     lowerIsBetter: false,
     threshold: {
-      green: (v) => v > 90,
-      yellow: (v) => v > 80,
+      green: (v) => v > 60,
+      yellow: (v) => v > 30,
     },
   },
   {
     id: "guardrail_trigger",
     label: "가드레일 트리거",
     engLabel: "GUARDRAIL span",
-    description: "안전 가드레일이 작동한 비율.",
+    description: "Rate of safety guardrail activations.",
     unit: "%",
     lowerIsBetter: true,
     threshold: {
@@ -174,7 +174,7 @@ export const MEASURE_METRICS: MeasureMetricDef[] = [
     id: "citation_accuracy",
     label: "인용 정확도",
     engLabel: "Citation Eval",
-    description: "응답에서 인용한 내용의 정확성.",
+    description: "Accuracy of cited content in responses.",
     unit: "%",
     lowerIsBetter: false,
     threshold: {
@@ -259,8 +259,19 @@ export function computeMetrics(
     user_frustration: feedbackStats
       ? pct(feedbackStats.downCount, feedbackStats.total)
       : 0,
+    // Tool calling = RAG retrieval appropriateness (LLM eval)
     tool_calling_accuracy: annotationAvgScore(annotations, "tool_calling") * 100,
-    guardrail_trigger: annotationRate(annotations, "guardrail", "triggered"),
+    // Guardrail: derived from banned_word + hallucination (not a standalone annotation)
+    guardrail_trigger: (() => {
+      const bw = annotations.filter((a) => a.name === "banned_word");
+      const hal = annotations.filter((a) => a.name === "hallucination");
+      if (bw.length === 0 && hal.length === 0) return 0;
+      const total = Math.max(bw.length, hal.length);
+      const triggered = new Set<string>();
+      for (const a of bw) if (a.label === "detected") triggered.add(a.time);
+      for (const a of hal) if (a.score > 0.5) triggered.add(a.time);
+      return pct(triggered.size, total);
+    })(),
     citation_accuracy: annotationAvgScore(annotations, "citation") * 100,
   };
 
@@ -292,10 +303,10 @@ export const GAP_STATUS_COLORS: Record<GapStatus, string> = {
 export function getRecommendedAction(status: GapStatus): string {
   switch (status) {
     case "NORMAL":
-      return "현재 수준을 유지하세요. 정기적인 모니터링을 계속하세요.";
+      return "Maintain current level. Continue regular monitoring.";
     case "WARNING":
-      return "지표가 목표에서 벗어나고 있습니다. 원인을 파악하고 개선 계획을 수립하세요.";
+      return "Metrics are drifting from target. Identify root cause and establish an improvement plan.";
     case "CRITICAL":
-      return "즉각적인 조치가 필요합니다. 관련 팀에 에스컬레이션하고 긴급 대응 프로세스를 시작하세요.";
+      return "Immediate action required. Escalate to relevant teams and initiate emergency response process.";
   }
 }

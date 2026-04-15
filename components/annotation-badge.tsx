@@ -5,10 +5,13 @@ const SHORT_NAME: Record<string, string> = {
   qa_correctness: "QA",
   banned_word: "BAN",
   rag_relevance: "RAG",
+  citation: "CIT",
+  tool_calling: "TOOL",
+  user_feedback: "FB",
 };
 
-const GOOD_LABELS = ["factual", "correct", "clean", "relevant"];
-const SCORE_TYPES = new Set(["rag_relevance"]);
+const GOOD_LABELS = ["factual", "correct", "clean", "relevant", "faithful", "success", "positive", "appropriate"];
+const SCORE_TYPES = new Set(["rag_relevance", "citation", "tool_calling"]);
 
 function isGood(a: Annotation): boolean {
   if (SCORE_TYPES.has(a.name)) return a.score > 0;
@@ -48,11 +51,19 @@ export function AnnotationBadge({ annotation }: { annotation: Annotation }) {
   );
 }
 
+/** Annotations to hide from badge display */
+const HIDDEN_ANNOTATIONS = new Set(["guardrail"]);
+/** Labels that mean "no feedback" — hide the badge entirely */
+const CANCELLED_LABELS = new Set(["cancelled"]);
+
 export function AnnotationBadges({ annotations }: { annotations: Annotation[] }) {
-  if (!annotations.length) return null;
+  const visible = annotations.filter(
+    (a) => !HIDDEN_ANNOTATIONS.has(a.name) && !CANCELLED_LABELS.has(a.label),
+  );
+  if (!visible.length) return null;
   return (
     <div className="flex flex-wrap gap-1">
-      {annotations.map((a) => (
+      {visible.map((a) => (
         <AnnotationBadge key={a.name} annotation={a} />
       ))}
     </div>

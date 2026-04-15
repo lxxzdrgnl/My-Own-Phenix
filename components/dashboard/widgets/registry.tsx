@@ -35,7 +35,7 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
   score_comparison:  { render: evaluation.score_comparison,  colorSlots: 4 },
   annotation_scores: {
     render: evaluation.annotation_scores,
-    colorSlots: 5,
+    colorSlots: 7,
     viewModes: { modes: ["summary", "detail"], labels: { summary: "Average", detail: "Count" } },
   },
 
@@ -48,15 +48,19 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
   throughput:           { render: performance.throughput,            colorSlots: 1 },
 
   // Tokens & Cost
-  token_usage:         { render: token.token_usage,         colorSlots: 2 },
+  token_usage:         { render: token.token_usage,         colorSlots: 2, viewModes: { modes: ["summary", "trend"], labels: { summary: "Summary", trend: "Daily" } } },
   token_cost:          { render: token.token_cost,          colorSlots: 1 },
   token_ratio:         { render: token.token_ratio,         colorSlots: 1 },
   avg_tokens_per_call: { render: token.avg_tokens_per_call, colorSlots: 1 },
   model_distribution:  { render: token.model_distribution,  colorSlots: 2 },
 
   // RMF
-  rmf_overview:      { render: rmf.rmf_overview,      colorSlots: 1 },
-  rmf_measure_grid:  { render: rmf.rmf_measure_grid,  colorSlots: 1 },
+  rmf_overview:          { render: rmf.rmf_overview,          colorSlots: 1 },
+  rmf_measure_grid:      { render: rmf.rmf_measure_grid,      colorSlots: 1 },
+  rmf_user_frustration:  { render: rmf.rmf_user_frustration,  colorSlots: 2 },
+  rmf_tool_calling:      { render: rmf.rmf_tool_calling,      colorSlots: 1 },
+  rmf_guardrail_trigger: { render: rmf.rmf_guardrail_trigger, colorSlots: 2 },
+  rmf_citation_accuracy: { render: rmf.rmf_citation_accuracy, colorSlots: 1 },
 };
 
 export function getColorSlots(type: string): number {

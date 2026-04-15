@@ -102,8 +102,8 @@ export function calcCost(s: SpanData) {
 
 // ─── Annotation helpers ───
 
-const GOOD_LABELS = new Set(["factual", "correct", "clean", "relevant"]);
-const SCORE_TYPES = new Set(["rag_relevance"]);
+const GOOD_LABELS = new Set(["factual", "correct", "clean", "relevant", "faithful", "success", "positive", "appropriate"]);
+const SCORE_TYPES = new Set(["rag_relevance", "citation"]);
 
 /** Matches annotation-badge.tsx logic */
 export function isAnnotationPass(a: AnnotationData): boolean {
@@ -112,7 +112,7 @@ export function isAnnotationPass(a: AnnotationData): boolean {
 }
 
 /** Default annotation display order */
-export const ANNOTATION_ORDER = ["rag_relevance", "qa_correctness", "hallucination", "banned_word"];
+export const ANNOTATION_ORDER = ["rag_relevance", "qa_correctness", "hallucination", "banned_word", "citation", "tool_calling", "user_feedback"];
 
 /** Default fail color */
 export const FAIL_COLOR_DEFAULT = "oklch(0.55 0.12 15)";

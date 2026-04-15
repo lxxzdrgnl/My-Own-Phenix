@@ -59,6 +59,11 @@ New UI must use the shared components in `components/ui/`. Do NOT inline duplica
 - `"use client"` directive on all interactive components
 - Prefer `useCallback` for async data-loading functions passed to `useEffect`
 
+## UI Rules
+
+- All UI must use **monochrome/grayscale color scheme** (black, white, gray tones only for base UI; color only for status indicators like green/yellow/red dots)
+- All UI text must be in **English only** — no Korean in UI labels, buttons, headers, or placeholders
+
 ## Architecture Overview
 
 ### Dashboard (`app/dashboard/page.tsx`)

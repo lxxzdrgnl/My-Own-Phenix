@@ -33,7 +33,7 @@ export function MeasureGrid({ metrics, className }: MeasureGridProps) {
                 }}
               />
               <span className="text-sm font-semibold text-foreground truncate">
-                {def.label}
+                {def.engLabel}
               </span>
             </div>
 
@@ -42,9 +42,9 @@ export function MeasureGrid({ metrics, className }: MeasureGridProps) {
               {metric.formatted}
             </span>
 
-            {/* Eng label */}
+            {/* Metric ID */}
             <span className="text-xs text-muted-foreground font-medium">
-              {def.engLabel}
+              {def.id}
             </span>
 
             {/* Description */}

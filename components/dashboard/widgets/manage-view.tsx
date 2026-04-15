@@ -88,7 +88,7 @@ function buildDonutOptions(risks: RiskItem[]): Highcharts.Options {
 
   return {
     chart: { type: "pie" },
-    title: { text: "처리 상태 분포", style: { fontSize: "14px" } },
+    title: { text: "Status Distribution", style: { fontSize: "14px" } },
     plotOptions: {
       pie: {
         innerSize: "60%",
@@ -98,7 +98,7 @@ function buildDonutOptions(risks: RiskItem[]): Highcharts.Options {
     series: [
       {
         type: "pie",
-        name: "리스크",
+        name: "Risks",
         data,
       },
     ],
@@ -176,7 +176,7 @@ export function ManageView({ projectId, className }: ManageViewProps) {
   if (loading) {
     return (
       <div className={cn("flex items-center justify-center py-16 text-muted-foreground text-sm", className)}>
-        로딩 중...
+        Loading...
       </div>
     );
   }
@@ -186,11 +186,11 @@ export function ManageView({ projectId, className }: ManageViewProps) {
       {/* Top row: 5 stat cards */}
       <div className="grid grid-cols-5 gap-3">
         {[
-          { value: `${coverage}%`, label: "MANAGE 커버리지" },
-          { value: openRisks, label: "미처리 리스크" },
-          { value: activeIncidents, label: "활성 인시던트" },
-          { value: overdueCount, label: "기한 초과 조치" },
-          { value: avgMttr !== null ? `${avgMttr}h` : "—", label: "평균 MTTR" },
+          { value: `${coverage}%`, label: "MANAGE Coverage" },
+          { value: openRisks, label: "Open Risks" },
+          { value: activeIncidents, label: "Active Incidents" },
+          { value: overdueCount, label: "Overdue Actions" },
+          { value: avgMttr !== null ? `${avgMttr}h` : "—", label: "Avg MTTR" },
         ].map((stat) => (
           <div key={stat.label} className="rounded-xl border bg-card h-28">
             <StatCard value={stat.value} label={stat.label} />
@@ -206,7 +206,7 @@ export function ManageView({ projectId, className }: ManageViewProps) {
             <HighchartWidget options={buildDonutOptions(risks)} />
           ) : (
             <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-              데이터 없음
+              No data
             </div>
           )}
         </div>
@@ -215,13 +215,13 @@ export function ManageView({ projectId, className }: ManageViewProps) {
         <div className="rounded-xl border bg-card flex flex-col overflow-hidden">
           {/* Table header + filter */}
           <div className="flex items-center justify-between border-b px-4 py-3">
-            <h3 className="text-sm font-semibold">처리 계획 목록</h3>
+            <h3 className="text-sm font-semibold">Risk Treatment Plan</h3>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className="rounded-md border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
             >
-              <option value="ALL">전체 상태</option>
+              <option value="ALL">All Status</option>
               {STATUS_LABELS.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -235,14 +235,14 @@ export function ManageView({ projectId, className }: ManageViewProps) {
             {filteredRisks.length === 0 ? (
               <EmptyState
                 icon={ShieldAlert}
-                title="리스크 항목이 없습니다"
+                title="No risk items found"
                 className="h-full"
               />
             ) : (
               <table className="w-full text-xs">
                 <thead className="bg-muted/30 sticky top-0">
                   <tr>
-                    {["리스크명", "시스템", "고유 위험", "처리 방안", "상태", "담당자"].map(
+                    {["Risk", "System", "Severity", "Mitigation", "Status", "Assignee"].map(
                       (h) => (
                         <th
                           key={h}

@@ -84,24 +84,11 @@ export function token_usage({ spans, viewMode, gridW, gridH, colors }: RenderPro
     return <TokenUsageSummary total={t.total} prompt={t.prompt} completion={t.completion} avgTotal={t.avgTotal} avgPrompt={t.avgPrompt} avgCompletion={t.avgCompletion} count={t.count} gridW={gridW} gridH={gridH} />;
   }
 
-  if (viewMode === "trend") {
-    return ch({ ...stackedColumnOpts(llm, [
-      { name: "Prompt", mapFn: (items) => sum(items.map((s) => s.promptTokens)) },
-      { name: "Completion", mapFn: (items) => sum(items.map((s) => s.completionTokens)) },
-    ], "Tokens") }, colors);
-  }
-
-  const perCall = llm.slice(-50);
-  return ch({
-    chart: { type: "column" },
-    xAxis: { categories: perCall.map((_, i) => `#${i + 1}`) },
-    yAxis: { title: { text: "Tokens" } },
-    plotOptions: { column: { stacking: "normal" } },
-    series: [
-      { type: "column", name: "Prompt", data: perCall.map((s) => s.promptTokens) },
-      { type: "column", name: "Completion", data: perCall.map((s) => s.completionTokens) },
-    ],
-  }, colors);
+  // trend (also used as default/detail)
+  return ch({ ...stackedColumnOpts(llm, [
+    { name: "Prompt", mapFn: (items) => sum(items.map((s) => s.promptTokens)) },
+    { name: "Completion", mapFn: (items) => sum(items.map((s) => s.completionTokens)) },
+  ], "Tokens") }, colors);
 }
 
 export function token_cost({ spans, viewMode, colors }: RenderProps) {
@@ -113,6 +100,7 @@ export function token_cost({ spans, viewMode, colors }: RenderProps) {
   const costs = llm.slice(-50).map((s) => round(calcCost(s), 6));
   return ch({ ...indexedSeriesOpts(costs, "column", "Cost per call", "$") }, colors);
 }
+
 
 export function token_ratio({ spans, viewMode, colors }: RenderProps) {
   const llm = llmFilter(spans);

@@ -19,30 +19,30 @@ const RMF_FUNCTIONS: FunctionDef[] = [
   {
     key: "GOVERN",
     name: "GOVERN",
-    label: "거버넌스",
+    label: "Governance",
     color: "#3b82f6",
-    description: "AI 정책 수립, 역할/책임 정의, 윤리 원칙, 교육·훈련",
+    description: "AI policy, roles/responsibilities, ethics principles, training",
   },
   {
     key: "MAP",
     name: "MAP",
-    label: "리스크 식별",
+    label: "Risk Identification",
     color: "#7c3aed",
-    description: "AI 시스템 인벤토리, 리스크 카테고리, 영향 범위 분석",
+    description: "AI system inventory, risk categories, impact analysis",
   },
   {
     key: "MEASURE",
     name: "MEASURE",
-    label: "리스크 측정",
+    label: "Risk Measurement",
     color: "#10b981",
-    description: "성능 지표, 편향성 평가, 환각/독성 모니터링",
+    description: "Performance metrics, bias evaluation, hallucination/toxicity monitoring",
   },
   {
     key: "MANAGE",
     name: "MANAGE",
-    label: "리스크 대응",
+    label: "Risk Response",
     color: "#14b8a6",
-    description: "개선 액션, 알림 체계, 인시던트 대응, 감사 이력",
+    description: "Remediation actions, alert systems, incident response, audit trail",
   },
 ];
 
@@ -75,7 +75,7 @@ export function RmfFunctionCards({ measureScore, className }: RmfFunctionCardsPr
                 {fn.name}
               </span>
 
-              {/* Korean label */}
+              {/* Label */}
               <span className="text-sm font-medium text-foreground">
                 {fn.label}
               </span>
