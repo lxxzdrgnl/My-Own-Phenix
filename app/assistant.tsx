@@ -12,7 +12,7 @@ import { PanelLeftClose, PanelLeft, X, Plus, LogOut, Settings } from "lucide-rea
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
-import { createThread, sendMessage } from "@/lib/chatApi";
+import { createThread, sendMessage, createThreadRest, sendMessageRest } from "@/lib/chatApi";
 import { Thread } from "@/components/assistant-ui/thread";
 import { Nav } from "@/components/nav";
 import { useAuth } from "@/lib/auth-context";
@@ -61,7 +61,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
   const historySentRef = useRef(false);
   const [runtimeKey, setRuntimeKey] = useState(0);
   const [isFadingOut, setIsFadingOut] = useState(false);
-  const [agentConfig, setAgentConfig] = useState<{ endpoint: string; assistantId: string } | null>(null);
+  const [agentConfig, setAgentConfig] = useState<{ endpoint: string; assistantId: string; agentType: string } | null>(null);
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
 
   // Keep ref in sync with state
@@ -93,7 +93,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
       .then((r) => r.json())
       .then((data) => {
         if (data.config) {
-          setAgentConfig({ endpoint: data.config.endpoint, assistantId: data.config.assistantId });
+          setAgentConfig({ endpoint: data.config.endpoint, assistantId: data.config.assistantId, agentType: data.config.agentType ?? "langgraph" });
         } else {
           setAgentConfig(null);
         }
@@ -125,8 +125,12 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
       attachments: attachmentAdapter,
     },
     stream: async function* (messages, { command }) {
+      const isRest = agentConfig?.agentType === "rest";
+
       if (!threadIdRef.current) {
-        const { thread_id } = await createThread(agentConfig?.endpoint);
+        const { thread_id } = isRest
+          ? await createThreadRest()
+          : await createThread(agentConfig?.endpoint);
         threadIdRef.current = thread_id;
 
         if (user) {
@@ -189,14 +193,21 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
       const allMessages = [...historyMessages, ...messages.slice(-1)];
       historySentRef.current = true;
 
-      const generator = await sendMessage({
-        threadId: threadIdRef.current,
-        messages: allMessages,
-        command,
-        project,
-        endpoint: agentConfig?.endpoint,
-        assistantId: agentConfig?.assistantId,
-      });
+      const generator = isRest
+        ? sendMessageRest({
+            endpoint: agentConfig?.endpoint ?? "",
+            threadId: threadIdRef.current,
+            messages: allMessages,
+            project,
+          })
+        : await sendMessage({
+            threadId: threadIdRef.current,
+            messages: allMessages,
+            command,
+            project,
+            endpoint: agentConfig?.endpoint,
+            assistantId: agentConfig?.assistantId,
+          });
 
       let assistantResponse = "";
       for await (const event of generator) {
@@ -385,7 +396,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
         open={agentConfigOpen}
         onClose={() => setAgentConfigOpen(false)}
         project={project}
-        onSaved={(cfg) => setAgentConfig(cfg)}
+        onSaved={(cfg) => setAgentConfig(cfg ? { ...cfg, agentType: cfg.agentType ?? "langgraph" } : null)}
       />
     </AssistantRuntimeProvider>
   );

@@ -9,6 +9,7 @@ import { FormLabel, FormError } from "@/components/ui/form-field";
 interface AgentConfig {
   endpoint: string;
   assistantId: string;
+  agentType?: string;
 }
 
 interface AgentConfigModalProps {
@@ -85,7 +86,7 @@ export function AgentConfigModal({ open, onClose, project, onSaved }: AgentConfi
         return;
       }
       setSavedMsg(true);
-      onSaved?.({ endpoint: endpoint.trim(), assistantId: assistantId.trim() });
+      onSaved?.({ endpoint: endpoint.trim(), assistantId: assistantId.trim(), agentType });
     } catch {
       setError("Network error. Please try again.");
     } finally {

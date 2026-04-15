@@ -4,14 +4,14 @@ import {
   LangGraphCommand,
 } from "@assistant-ui/react-langgraph";
 
+// ── LangGraph adapter ────────────────────────────────────────────────────
+
 const createClient = (endpoint?: string) => {
   const apiUrl =
     endpoint ||
     process.env["NEXT_PUBLIC_LANGGRAPH_API_URL"] ||
     new URL("/api", window.location.href).href;
-  return new Client({
-    apiUrl,
-  });
+  return new Client({ apiUrl });
 };
 
 export const createThread = async (endpoint?: string) => {
@@ -49,9 +49,7 @@ export const sendMessage = async (params: {
     aid,
     {
       input: params.messages?.length
-        ? {
-            messages: params.messages,
-          }
+        ? { messages: params.messages }
         : null,
       command: params.command,
       streamMode: ["messages"],
@@ -61,3 +59,112 @@ export const sendMessage = async (params: {
     },
   );
 };
+
+// ── REST SSE adapter ─────────────────────────────────────────────────────
+
+export const createThreadRest = async () => {
+  // REST agents don't have server-side threads — generate a local ID
+  return { thread_id: `rest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
+};
+
+/**
+ * Send a message to a REST SSE agent and return an async generator
+ * that yields events in the same format as LangGraph SDK.
+ */
+export async function* sendMessageRest(params: {
+  endpoint: string;
+  threadId: string;
+  messages?: LangChainMessage[];
+  project?: string;
+}): AsyncGenerator<{ event: string; data: unknown }> {
+  const lastMsg = params.messages?.[params.messages.length - 1];
+  const userContent =
+    typeof lastMsg?.content === "string"
+      ? lastMsg.content
+      : "";
+
+  const response = await fetch(`${params.endpoint}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messages: (params.messages ?? []).map((m) => ({
+        role: "type" in m ? (m.type === "human" ? "user" : "assistant") : "user",
+        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      })),
+      thread_id: params.threadId,
+      project: params.project,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Agent returned ${response.status}: ${await response.text()}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullContent = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const raw = line.slice(6).trim();
+      if (!raw || raw === "[DONE]") continue;
+
+      try {
+        const parsed = JSON.parse(raw);
+
+        // Handle different SSE formats from agents
+        if (parsed.event === "messages/partial" || parsed.event === "messages/complete") {
+          // Already in LangGraph format
+          yield parsed;
+          continue;
+        }
+
+        // Generic format: { content: "chunk" } or { delta: "chunk" }
+        const chunk = parsed.content ?? parsed.delta ?? parsed.text ?? "";
+        if (chunk) {
+          fullContent += chunk;
+          yield {
+            event: "messages/partial",
+            data: [{ type: "ai", content: fullContent }],
+          };
+        }
+
+        // Done event
+        if (parsed.event === "done" || parsed.done === true) {
+          yield {
+            event: "messages/complete",
+            data: [{ type: "ai", content: fullContent }],
+          };
+        }
+      } catch {
+        // Non-JSON line, try as plain text chunk
+        if (raw) {
+          fullContent += raw;
+          yield {
+            event: "messages/partial",
+            data: [{ type: "ai", content: fullContent }],
+          };
+        }
+      }
+    }
+  }
+
+  // Ensure a final complete event
+  if (fullContent) {
+    yield {
+      event: "messages/complete",
+      data: [{ type: "ai", content: fullContent }],
+    };
+  }
+}

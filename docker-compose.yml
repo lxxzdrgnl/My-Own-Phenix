@@ -10,10 +10,11 @@ services:
     environment:
       - PHOENIX_WORKING_DIR=/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6006/healthz"]
-      interval: 10s
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6006/healthz')"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 15s
 
   dashboard:
     build:
@@ -28,7 +29,7 @@ services:
       - /app/node_modules
       - /app/.next
     env_file:
-      - .env.local
+      - .env
     environment:
       - PHOENIX_URL=http://phoenix:6006
       - PHOENIX_COLLECTOR_ENDPOINT=http://phoenix:6006
@@ -41,12 +42,12 @@ services:
     build:
       context: ./eval-worker
       dockerfile: Dockerfile
+    env_file:
+      - .env
     environment:
       - PHOENIX_URL=http://phoenix:6006
       - DASHBOARD_URL=http://dashboard:3000
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - EVAL_POLL_INTERVAL=15
-      - BANNED_WORDS=${BANNED_WORDS:-}
     depends_on:
       phoenix:
         condition: service_healthy
