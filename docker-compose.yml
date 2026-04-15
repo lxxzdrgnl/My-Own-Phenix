@@ -37,5 +37,20 @@ services:
       phoenix:
         condition: service_healthy
 
+  eval-worker:
+    build:
+      context: ./eval-worker
+      dockerfile: Dockerfile
+    environment:
+      - PHOENIX_URL=http://phoenix:6006
+      - DASHBOARD_URL=http://dashboard:3000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EVAL_POLL_INTERVAL=15
+      - BANNED_WORDS=${BANNED_WORDS:-}
+    depends_on:
+      phoenix:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   phoenix_data:
