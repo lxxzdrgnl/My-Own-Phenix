@@ -20,6 +20,8 @@ import {
   Cpu,
   Gauge,
   Hash,
+  LayoutGrid,
+  Table2,
 } from "lucide-react";
 
 export const WIDGET_GROUPS = [
@@ -53,6 +55,13 @@ export const WIDGET_GROUPS = [
       { type: "token_ratio", title: "Input/Output Ratio", icon: ArrowLeftRight },
       { type: "avg_tokens_per_call", title: "Avg Tokens/Call", icon: Hash },
       { type: "model_distribution", title: "Model Distribution", icon: Cpu },
+    ],
+  },
+  {
+    label: "RMF",
+    items: [
+      { type: "rmf_overview", title: "RMF Overview", icon: LayoutGrid },
+      { type: "rmf_measure_grid", title: "MEASURE 지표 그리드", icon: Table2 },
     ],
   },
 ] as const;

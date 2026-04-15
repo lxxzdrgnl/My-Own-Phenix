@@ -5,6 +5,7 @@ import type { WidgetViewMode, WidgetColors } from "../widget-grid";
 import * as evaluation from "./evaluation-widgets";
 import * as performance from "./performance-widgets";
 import * as token from "./token-widgets";
+import * as rmf from "./rmf-widgets";
 
 export interface WidgetRenderProps {
   annotations: AnnotationData[];
@@ -52,6 +53,10 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
   token_ratio:         { render: token.token_ratio,         colorSlots: 1 },
   avg_tokens_per_call: { render: token.avg_tokens_per_call, colorSlots: 1 },
   model_distribution:  { render: token.model_distribution,  colorSlots: 2 },
+
+  // RMF
+  rmf_overview:      { render: rmf.rmf_overview,      colorSlots: 1 },
+  rmf_measure_grid:  { render: rmf.rmf_measure_grid,  colorSlots: 1 },
 };
 
 export function getColorSlots(type: string): number {

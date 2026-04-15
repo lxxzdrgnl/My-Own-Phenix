@@ -7,12 +7,13 @@ datasource db {
 }
 
 model User {
-  id        String           @id
+  id        String              @id
   email     String
   name      String?
-  createdAt DateTime         @default(now())
+  createdAt DateTime            @default(now())
   threads   Thread[]
   layouts   DashboardLayout[]
+  feedbacks MessageFeedback[]
 }
 
 model Thread {
@@ -28,12 +29,51 @@ model Thread {
 }
 
 model Message {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   threadId  String
   role      String
   content   String
+  createdAt DateTime          @default(now())
+  thread    Thread            @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  feedback  MessageFeedback[]
+}
+
+model MessageFeedback {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  value     String
   createdAt DateTime @default(now())
-  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId])
+}
+
+model RiskItem {
+  id         String    @id @default(cuid())
+  projectId  String
+  name       String
+  system     String
+  riskLevel  String
+  mitigation String
+  status     String    @default("OPEN")
+  assignee   String?
+  dueDate    DateTime?
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Incident {
+  id         String    @id @default(cuid())
+  projectId  String
+  title      String
+  severity   String
+  status     String    @default("OPEN")
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
 }
 
 model DashboardLayout {
