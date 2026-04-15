@@ -1,0 +1,41 @@
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"   # UI + API
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    volumes:
+      - phoenix_data:/data
+    environment:
+      - PHOENIX_WORKING_DIR=/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6006/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source for hot-reload in dev mode
+      - .:/app
+      # Prevent overwriting node_modules from container
+      - /app/node_modules
+      - /app/.next
+    env_file:
+      - .env.local
+    environment:
+      - PHOENIX_URL=http://phoenix:6006
+      - PHOENIX_COLLECTOR_ENDPOINT=http://phoenix:6006
+      - WATCHPACK_POLLING=true
+    depends_on:
+      phoenix:
+        condition: service_healthy
+
+volumes:
+  phoenix_data:
