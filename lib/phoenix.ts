@@ -105,11 +105,15 @@ export async function fetchTraces(
   projectName: string,
   spanKinds?: string,
   contentFilter?: string,
+  startTime?: string,
+  endTime?: string,
 ): Promise<Trace[]> {
   // 1. Get all spans
-  const spansRes = await fetch(
-    `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/spans&limit=1000`,
-  );
+  let spansUrl = `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/spans&limit=1000`;
+  if (startTime) spansUrl += `&start_time=${encodeURIComponent(startTime)}`;
+  if (endTime) spansUrl += `&end_time=${encodeURIComponent(endTime)}`;
+
+  const spansRes = await fetch(spansUrl);
   const spansData = await spansRes.json();
   const allSpans: any[] = spansData.data ?? [];
 

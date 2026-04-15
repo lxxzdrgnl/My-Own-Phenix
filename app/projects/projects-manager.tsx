@@ -20,6 +20,7 @@ import {
 import { Nav } from "@/components/nav";
 import { Input } from "@/components/ui/input";
 import { LoadingState, EmptyState } from "@/components/ui/empty-state";
+import { DateRangePicker, getPresetRange, type DateRange } from "@/components/ui/date-range-picker";
 
 function formatMs(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -141,6 +142,7 @@ export function ProjectsManager() {
   const [annotationFilter, setAnnotationFilter] = useState<"all" | "pass" | "fail" | "none">("all");
   const [latencyFilter, setLatencyFilter] = useState<"all" | "fast" | "medium" | "slow">("all");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetRange(7));
 
   function saveOrder(ps: Project[]) {
     localStorage.setItem("project_order", JSON.stringify(ps.map((p) => p.name)));
@@ -181,14 +183,20 @@ export function ProjectsManager() {
     if (!selectedProject) return;
     setTracesLoading(true);
     try {
-      const t = await fetchTraces(selectedProject);
+      const t = await fetchTraces(
+        selectedProject,
+        undefined,
+        undefined,
+        dateRange.from?.toISOString(),
+        dateRange.to?.toISOString(),
+      );
       t.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
       setTraces(t);
     } catch (e) {
       console.error(e);
     }
     setTracesLoading(false);
-  }, [selectedProject]);
+  }, [selectedProject, dateRange]);
 
   useEffect(() => {
     load();
@@ -425,6 +433,8 @@ export function ProjectsManager() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {/* Date range */}
+                      <DateRangePicker value={dateRange} onChange={setDateRange} />
                       {/* Search */}
                       <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />

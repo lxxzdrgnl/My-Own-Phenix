@@ -14,6 +14,7 @@ import {
 import { AddWidgetMenu, WIDGET_GROUPS } from "@/components/dashboard/add-widget-menu";
 import { ProjectSelector } from "@/components/project-selector";
 import { fetchProjects } from "@/lib/phoenix";
+import { DateRangePicker, getPresetRange, type DateRange } from "@/components/ui/date-range-picker";
 import { type AnnotationData, type SpanData } from "@/lib/dashboard-utils";
 import { widgetRegistry } from "@/components/dashboard/widgets/registry";
 
@@ -92,6 +93,7 @@ export default function DashboardPage() {
     localStorage.setItem("last_dashboard_project", name);
   };
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetRange(7));
 
   useEffect(() => { fetchProjects().then((p) => setProjects(p.filter((x) => x.name !== "playground"))).catch(() => {}); }, []);
 
@@ -139,7 +141,10 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        const spansRes = await fetch(`/api/phoenix?path=/v1/projects/${encodeURIComponent(project)}/spans&limit=500`);
+        let spansUrl = `/api/phoenix?path=/v1/projects/${encodeURIComponent(project)}/spans&limit=500`;
+        if (dateRange.from) spansUrl += `&start_time=${encodeURIComponent(dateRange.from.toISOString())}`;
+        if (dateRange.to) spansUrl += `&end_time=${encodeURIComponent(dateRange.to.toISOString())}`;
+        const spansRes = await fetch(spansUrl);
         const spansData = await spansRes.json();
         const allSpans: any[] = spansData.data ?? [];
 
@@ -176,7 +181,7 @@ export default function DashboardPage() {
       } catch {}
     }
     load();
-  }, [project]);
+  }, [project, dateRange]);
 
   // ─── Widget rendering via registry ───
 
@@ -241,6 +246,7 @@ export default function DashboardPage() {
         <h1 className="text-lg font-bold tracking-tight">Dashboard</h1>
         <div className="h-4 w-px bg-border/60" />
         <ProjectSelector project={project} projects={projects} onChange={setProject} />
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
         <AddWidgetMenu onAdd={handleAddWidget} />
       </div>
       <div className="relative flex-1 overflow-y-auto p-4" style={{ backgroundImage: "radial-gradient(circle, var(--border) 1px, transparent 1px)", backgroundSize: "24px 24px" }}>
