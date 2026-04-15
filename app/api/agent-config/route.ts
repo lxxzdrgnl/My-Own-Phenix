@@ -16,9 +16,10 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const body = await req.json();
-  const { project, alias, agentType, endpoint, assistantId } = body as {
+  const { project, alias, templateId, agentType, endpoint, assistantId } = body as {
     project: string;
     alias?: string;
+    templateId?: string | null;
     agentType?: string;
     endpoint?: string;
     assistantId?: string;
@@ -32,6 +33,7 @@ export async function PUT(req: NextRequest) {
     where: { project },
     update: {
       ...(alias !== undefined && { alias: alias || null }),
+      ...(templateId !== undefined && { templateId: templateId || null }),
       ...(agentType !== undefined && { agentType }),
       ...(endpoint !== undefined && { endpoint }),
       ...(assistantId !== undefined && { assistantId }),
@@ -39,6 +41,7 @@ export async function PUT(req: NextRequest) {
     create: {
       project,
       alias: alias || null,
+      templateId: templateId || null,
       agentType: agentType ?? "langgraph",
       endpoint: endpoint ?? "http://localhost:2024",
       assistantId: assistantId ?? "agent",

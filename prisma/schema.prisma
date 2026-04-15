@@ -98,8 +98,23 @@ model AgentConfig {
   id          String   @id @default(cuid())
   project     String   @unique          // Phoenix project name
   alias       String?                   // Display name in dashboard (null = use project name)
+  templateId  String?                   // AgentTemplate reference (null = custom)
   agentType   String   @default("langgraph")
   endpoint    String   @default("http://localhost:2024")
   assistantId String   @default("agent")
   updatedAt   DateTime @updatedAt
+  template    AgentTemplate? @relation(fields: [templateId], references: [id])
+}
+
+model AgentTemplate {
+  id          String        @id @default(cuid())
+  name        String        @unique    // "Legal RAG", "Financial Research", etc.
+  description String        @default("")
+  agentType   String        @default("langgraph")
+  endpoint    String        @default("http://localhost:2024")
+  assistantId String        @default("agent")
+  evalPrompts String        @default("{}") // JSON: {"hallucination": "...", "citation": "..."}
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  configs     AgentConfig[]
 }
