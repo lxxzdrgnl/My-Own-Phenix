@@ -63,10 +63,64 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
   rmf_citation_accuracy: { render: rmf.rmf_citation_accuracy, colorSlots: 1 },
 };
 
+/**
+ * Dynamic eval widget factory.
+ * Widget types starting with "eval_" are rendered as generic annotation widgets.
+ * e.g., "eval_test" reads annotations with name "test".
+ */
+import { StatCard } from "./stat-card";
+import { HighchartWidget } from "./highchart-widget";
+import { avg, round, dailyCategories, chartOpts } from "@/lib/dashboard-utils";
+
+function createEvalWidget(annotationName: string): WidgetMeta {
+  return {
+    render: ({ annotations, viewMode, colors }: WidgetRenderProps) => {
+      const data = annotations.filter((a) => a.name === annotationName);
+      const scores = data.map((d) => d.score);
+      const avgScore = scores.length > 0 ? avg(scores) : 0;
+
+      if (viewMode === "summary") {
+        return <StatCard value={`${(avgScore * 100).toFixed(1)}%`} label={`${annotationName} Score`} trend={`${scores.length} samples`} />;
+      }
+
+      if (viewMode === "trend") {
+        const { daily, cats } = dailyCategories(data);
+        return <HighchartWidget options={chartOpts({
+          xAxis: { categories: cats },
+          yAxis: { title: { text: "%" }, min: 0, max: 100 },
+          series: [{ type: "area" as const, name: annotationName, data: daily.map(([, items]) => round(avg(items.map((i) => i.score)) * 100, 1)) }],
+          colors,
+        })} />;
+      }
+
+      // detail
+      return <HighchartWidget options={chartOpts({
+        xAxis: { categories: scores.map((_, i) => `#${i + 1}`) },
+        yAxis: { title: { text: "Score" }, min: 0, max: 1 },
+        series: [{ type: "line" as const, name: annotationName, data: scores }],
+        colors,
+      })} />;
+    },
+    colorSlots: 1,
+  };
+}
+
+export function getWidget(type: string): WidgetMeta | undefined {
+  if (widgetRegistry[type]) return widgetRegistry[type];
+  // Dynamic eval widgets: "eval_xxx" → annotation name "xxx"
+  if (type.startsWith("eval_")) {
+    const name = type.slice(5);
+    const meta = createEvalWidget(name);
+    widgetRegistry[type] = meta; // Cache
+    return meta;
+  }
+  return undefined;
+}
+
 export function getColorSlots(type: string): number {
-  return widgetRegistry[type]?.colorSlots ?? 2;
+  return getWidget(type)?.colorSlots ?? 2;
 }
 
 export function getViewModes(type: string) {
-  return widgetRegistry[type]?.viewModes;
+  return getWidget(type)?.viewModes;
 }

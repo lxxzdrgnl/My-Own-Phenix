@@ -16,7 +16,7 @@ import { ProjectSelector } from "@/components/project-selector";
 import { fetchProjects } from "@/lib/phoenix";
 import { DateRangePicker, getPresetRange, type DateRange } from "@/components/ui/date-range-picker";
 import { type AnnotationData, type SpanData } from "@/lib/dashboard-utils";
-import { widgetRegistry } from "@/components/dashboard/widgets/registry";
+import { getWidget } from "@/components/dashboard/widgets/registry";
 
 // ─── Title sync & layout helpers ───
 
@@ -187,7 +187,7 @@ export default function DashboardPage() {
 
   const renderWidget = useCallback(
     (widget: WidgetConfig, viewMode: WidgetViewMode, gridW: number, gridH: number, colors: WidgetColors) => {
-      const meta = widgetRegistry[widget.type];
+      const meta = getWidget(widget.type);
       if (!meta) return <div className="text-muted-foreground text-sm">Unknown widget</div>;
       return meta.render({ annotations, spans, viewMode, gridW, gridH, colors });
     },

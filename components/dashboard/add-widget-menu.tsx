@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   PlusIcon,
@@ -26,6 +26,7 @@ import {
   Wrench,
   ShieldCheck,
   BookOpen,
+  FlaskConical,
 } from "lucide-react";
 
 export const WIDGET_GROUPS = [
@@ -80,12 +81,28 @@ interface AddWidgetMenuProps {
   onAdd: (type: string, title: string) => void;
 }
 
+interface CustomEval {
+  name: string;
+  evalType: string;
+  isCustom: boolean;
+}
+
 export function AddWidgetMenu({ onAdd }: AddWidgetMenuProps) {
   const [open, setOpen] = useState(false);
+  const [customEvals, setCustomEvals] = useState<CustomEval[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const loadCustomEvals = useCallback(async () => {
+    try {
+      const res = await fetch("/api/eval-prompts");
+      const data = await res.json();
+      setCustomEvals((data.prompts ?? []).filter((p: CustomEval) => p.isCustom));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+    loadCustomEvals();
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -93,7 +110,7 @@ export function AddWidgetMenu({ onAdd }: AddWidgetMenuProps) {
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  }, [open, loadCustomEvals]);
 
   return (
     <div className="relative" ref={menuRef}>
@@ -131,6 +148,29 @@ export function AddWidgetMenu({ onAdd }: AddWidgetMenuProps) {
               })}
             </div>
           ))}
+          {customEvals.length > 0 && (
+            <div>
+              <div className="px-2.5 pb-1 pt-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+                Custom Evals
+              </div>
+              {customEvals.map((e) => (
+                <button
+                  key={e.name}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-base transition-colors hover:bg-accent"
+                  onClick={() => {
+                    onAdd(`eval_${e.name}`, e.name);
+                    setOpen(false);
+                  }}
+                >
+                  <FlaskConical className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="font-medium">{e.name}</span>
+                  <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                    {e.evalType === "code_rule" ? "rule" : "llm"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

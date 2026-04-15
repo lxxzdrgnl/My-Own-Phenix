@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
   Bot,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { signOut } from "firebase/auth";
@@ -21,6 +22,7 @@ const links = [
   { href: "/", label: "Chat", icon: MessageSquare, public: true },
   { href: "/playground", label: "Playground", icon: FlaskConical, public: false },
   { href: "/projects", label: "Projects", icon: FolderOpen, public: false },
+  { href: "/evaluations", label: "Evaluations", icon: SlidersHorizontal, public: false },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, public: false },
 ];
 

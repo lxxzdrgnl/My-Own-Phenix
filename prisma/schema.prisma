@@ -88,10 +88,23 @@ model DashboardLayout {
 }
 
 model EvalPrompt {
-  id        String   @id @default(cuid())
-  name      String   @unique  // "hallucination", "citation", "tool_calling"
-  template  String            // the full prompt template
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  name       String   @unique  // "hallucination", "citation", "tool_calling", or custom
+  evalType   String   @default("llm_prompt") // "llm_prompt" | "code_rule" | "builtin"
+  template   String   @default("")           // prompt text for llm_prompt, empty for code_rule
+  ruleConfig String   @default("{}")         // JSON rule config for code_rule type
+  isCustom   Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+}
+
+model ProjectEvalConfig {
+  id         String  @id @default(cuid())
+  projectId  String
+  evalName   String  // annotation name (e.g. "hallucination")
+  enabled    Boolean @default(true)
+  template   String? // project-specific prompt override (null = use global default)
+
+  @@unique([projectId, evalName])
 }
 
 model AgentConfig {
