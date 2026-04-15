@@ -4,8 +4,9 @@ import {
   LangGraphCommand,
 } from "@assistant-ui/react-langgraph";
 
-const createClient = () => {
+const createClient = (endpoint?: string) => {
   const apiUrl =
+    endpoint ||
     process.env["NEXT_PUBLIC_LANGGRAPH_API_URL"] ||
     new URL("/api", window.location.href).href;
   return new Client({
@@ -13,8 +14,8 @@ const createClient = () => {
   });
 };
 
-export const createThread = async () => {
-  const client = createClient();
+export const createThread = async (endpoint?: string) => {
+  const client = createClient(endpoint);
   return client.threads.create();
 };
 
@@ -30,19 +31,22 @@ export const sendMessage = async (params: {
   messages?: LangChainMessage[];
   command?: LangGraphCommand | undefined;
   project?: string;
+  endpoint?: string;
+  assistantId?: string;
 }) => {
-  const client = createClient();
-  const assistantId = process.env["NEXT_PUBLIC_LANGGRAPH_ASSISTANT_ID"];
+  const client = createClient(params.endpoint);
+  const aid =
+    params.assistantId || process.env["NEXT_PUBLIC_LANGGRAPH_ASSISTANT_ID"];
 
-  if (!assistantId) {
+  if (!aid) {
     throw new Error(
-      "Missing NEXT_PUBLIC_LANGGRAPH_ASSISTANT_ID. Set this env var to your LangGraph assistant/graph ID (see .env.example).",
+      "Missing assistant ID. Set NEXT_PUBLIC_LANGGRAPH_ASSISTANT_ID or configure it per-project in Agent Settings.",
     );
   }
 
   return client.runs.stream(
     params.threadId,
-    assistantId,
+    aid,
     {
       input: params.messages?.length
         ? {

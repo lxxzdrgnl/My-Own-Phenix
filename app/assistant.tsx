@@ -8,7 +8,7 @@ import {
 } from "@assistant-ui/react";
 import { useLangGraphRuntime } from "@assistant-ui/react-langgraph";
 import { useRef, useState, useCallback, useEffect } from "react";
-import { PanelLeftClose, PanelLeft, X, Plus, LogOut } from "lucide-react";
+import { PanelLeftClose, PanelLeft, X, Plus, LogOut, Settings } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
@@ -17,6 +17,7 @@ import { Thread } from "@/components/assistant-ui/thread";
 import { Nav } from "@/components/nav";
 import { useAuth } from "@/lib/auth-context";
 import { ProjectSelector } from "@/components/project-selector";
+import { AgentConfigModal } from "@/components/agent-config-modal";
 
 const attachmentAdapter = new CompositeAttachmentAdapter([
   new SimpleImageAttachmentAdapter(),
@@ -60,6 +61,8 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
   const historySentRef = useRef(false);
   const [runtimeKey, setRuntimeKey] = useState(0);
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [agentConfig, setAgentConfig] = useState<{ endpoint: string; assistantId: string } | null>(null);
+  const [agentConfigOpen, setAgentConfigOpen] = useState(false);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -84,6 +87,19 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
       setThreads([]);
     }
   }, [user, refreshThreads]);
+
+  useEffect(() => {
+    fetch(`/api/agent-config?project=${encodeURIComponent(project)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.config) {
+          setAgentConfig({ endpoint: data.config.endpoint, assistantId: data.config.assistantId });
+        } else {
+          setAgentConfig(null);
+        }
+      })
+      .catch(() => setAgentConfig(null));
+  }, [project]);
 
   // Reset chat state when project changes
   const prevProjectRef = useRef(project);
@@ -110,7 +126,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
     },
     stream: async function* (messages, { command }) {
       if (!threadIdRef.current) {
-        const { thread_id } = await createThread();
+        const { thread_id } = await createThread(agentConfig?.endpoint);
         threadIdRef.current = thread_id;
 
         if (user) {
@@ -178,6 +194,8 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
         messages: allMessages,
         command,
         project,
+        endpoint: agentConfig?.endpoint,
+        assistantId: agentConfig?.assistantId,
       });
 
       let assistantResponse = "";
@@ -278,14 +296,23 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
                   <PanelLeftClose className="h-4 w-4" />
                 </button>
               </div>
-              <div className="px-2 pt-2">
-                <ProjectSelector
-                  project={project}
-                  projects={projects}
-                  onChange={(name) => onProjectChange?.(name)}
-                  onAdd={onProjectAdd}
-                  size="sm"
-                />
+              <div className="px-2 pt-2 flex items-center gap-1">
+                <div className="flex-1">
+                  <ProjectSelector
+                    project={project}
+                    projects={projects}
+                    onChange={(name) => onProjectChange?.(name)}
+                    onAdd={onProjectAdd}
+                    size="sm"
+                  />
+                </div>
+                <button
+                  onClick={() => setAgentConfigOpen(true)}
+                  className="shrink-0 rounded p-1.5 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  title="Agent Settings"
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
               </div>
               <div className="px-2 py-2">
                 <button
@@ -354,6 +381,12 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
           </div>
         </div>
       </div>
+      <AgentConfigModal
+        open={agentConfigOpen}
+        onClose={() => setAgentConfigOpen(false)}
+        project={project}
+        onSaved={(cfg) => setAgentConfig(cfg)}
+      />
     </AssistantRuntimeProvider>
   );
 }

@@ -93,3 +93,13 @@ model EvalPrompt {
   template  String            // the full prompt template
   updatedAt DateTime @updatedAt
 }
+
+model AgentConfig {
+  id          String   @id @default(cuid())
+  project     String   @unique          // Phoenix project name
+  alias       String?                   // Display name in dashboard (null = use project name)
+  agentType   String   @default("langgraph")
+  endpoint    String   @default("http://localhost:2024")
+  assistantId String   @default("agent")
+  updatedAt   DateTime @updatedAt
+}
