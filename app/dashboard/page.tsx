@@ -44,16 +44,10 @@ const LARGE_MIN_TYPES = new Set(["score_comparison", "annotation_scores"]);
 const widgetMinSize = (type: string) =>
   LARGE_MIN_TYPES.has(type) ? { minW: 2, minH: 1 } : { minW: 1, minH: 1 };
 
-function findBottomPosition(existing: LayoutItem[], w: number, h: number, cols: number): { x: number; y: number } {
+function findBottomPosition(existing: LayoutItem[], w: number, _h: number, _cols: number): { x: number; y: number } {
   if (existing.length === 0) return { x: 0, y: 0 };
+  // Place below all existing widgets with a gap
   const bottom = Math.max(...existing.map((l) => l.y + l.h));
-  for (let x = 0; x <= cols - w; x++) {
-    const candidate = { x, y: bottom, w, h };
-    const hasCollision = existing.some(
-      (l) => l.x < candidate.x + candidate.w && l.x + l.w > candidate.x && l.y < candidate.y + candidate.h && l.y + l.h > candidate.y,
-    );
-    if (!hasCollision) return { x, y: bottom };
-  }
   return { x: 0, y: bottom };
 }
 
@@ -67,10 +61,10 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
 ];
 
 const DEFAULT_LAYOUTS: LayoutItem[] = [
-  { i: "w1", x: 0, y: 0, w: 6, h: 3, minW: 3, minH: 2 },
-  { i: "w2", x: 6, y: 0, w: 6, h: 3, minW: 3, minH: 2 },
-  { i: "w3", x: 0, y: 3, w: 3, h: 2, minW: 3, minH: 2 },
-  { i: "w4", x: 3, y: 3, w: 3, h: 2, minW: 3, minH: 2 },
+  { i: "w1", x: 0, y: 0, w: 5, h: 3, minW: 1, minH: 1 },
+  { i: "w2", x: 5, y: 0, w: 5, h: 3, minW: 1, minH: 1 },
+  { i: "w3", x: 0, y: 3, w: 3, h: 2, minW: 1, minH: 1 },
+  { i: "w4", x: 3, y: 3, w: 3, h: 2, minW: 1, minH: 1 },
 ];
 
 // ─── Page ───
@@ -84,10 +78,11 @@ export default function DashboardPage() {
   const [layoutLoaded, setLayoutLoaded] = useState(false);
   const [annotations, setAnnotations] = useState<AnnotationData[]>([]);
   const [spans, setSpans] = useState<SpanData[]>([]);
-  const [project, setProjectState] = useState(() => {
-    if (typeof window === "undefined") return "default";
-    return localStorage.getItem("last_dashboard_project") || "default";
-  });
+  const [project, setProjectState] = useState("default");
+  useEffect(() => {
+    const saved = localStorage.getItem("last_dashboard_project");
+    if (saved) setProjectState(saved);
+  }, []);
   const setProject = (name: string) => {
     setProjectState(name);
     localStorage.setItem("last_dashboard_project", name);
@@ -122,18 +117,19 @@ export default function DashboardPage() {
 
   const saveLayout = useCallback(
     (newLayouts: readonly LayoutItem[], newWidgets?: WidgetConfig[], newViewModes?: Record<string, WidgetViewMode>, newColors?: Record<string, WidgetColors>) => {
+      if (!layoutLoaded || !user) return; // Don't save while switching projects
       const w = newWidgets ?? widgets;
       const vm = newViewModes ?? viewModes;
       const wc = newColors ?? widgetColors;
-      if (newWidgets) setLayouts([...newLayouts]);
-      if (!user) return;
+      // Keep layouts state in sync with what the grid reports
+      setLayouts([...newLayouts] as LayoutItem[]);
       fetch("/api/dashboard/layout", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.uid, project, layout: JSON.stringify({ widgets: w, layouts: newLayouts, viewModes: vm, widgetColors: wc }) }),
       }).catch(() => {});
     },
-    [user, widgets, viewModes, widgetColors, project],
+    [user, widgets, viewModes, widgetColors, project, layoutLoaded],
   );
 
   // ─── Data loading ───
@@ -204,11 +200,12 @@ export default function DashboardPage() {
       const h = LARGE_MIN_TYPES.has(type) ? 3 : 2;
       const pos = findBottomPosition(layouts, w, h, 10);
       const newWidgets = [...widgets, { id, type, title }];
-      const newLayouts = [...layouts, { i: id, x: pos.x, y: pos.y, w, h, ...min }];
+      const newLayout: LayoutItem = { i: id, x: pos.x, y: pos.y, w, h, ...min };
+      const newLayouts = [...layouts, newLayout];
       setWidgets(newWidgets);
-      saveLayout(newLayouts, newWidgets);
+      setLayouts(newLayouts);
     },
-    [widgets, layouts, saveLayout],
+    [widgets, layouts],
   );
 
   const handleViewModeChange = useCallback(

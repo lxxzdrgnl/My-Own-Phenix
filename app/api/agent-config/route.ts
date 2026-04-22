@@ -6,11 +6,11 @@ export async function GET(req: NextRequest) {
 
   // If no project specified, return all configs (for alias lookup)
   if (!project) {
-    const configs = await prisma.agentConfig.findMany();
+    const configs = await prisma.agentConfig.findMany({ include: { template: true } });
     return NextResponse.json({ configs });
   }
 
-  const config = await prisma.agentConfig.findUnique({ where: { project } });
+  const config = await prisma.agentConfig.findUnique({ where: { project }, include: { template: true } });
   return NextResponse.json({ config: config ?? null });
 }
 

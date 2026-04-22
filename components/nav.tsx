@@ -10,6 +10,7 @@ import {
   LogOut,
   Bot,
   SlidersHorizontal,
+  Database,
 } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { signOut } from "firebase/auth";
@@ -23,6 +24,7 @@ const links = [
   { href: "/playground", label: "Playground", icon: FlaskConical, public: false },
   { href: "/projects", label: "Projects", icon: FolderOpen, public: false },
   { href: "/evaluations", label: "Evaluations", icon: SlidersHorizontal, public: false },
+  { href: "/datasets", label: "Datasets", icon: Database, public: false },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, public: false },
 ];
 
@@ -75,24 +77,33 @@ export function Nav() {
             </Link>
           );
         })}
-        {user && (
-          <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1">
+          {user ? (
+            <>
+              <button
+                onClick={() => setShowTemplates(true)}
+                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Bot className="h-4 w-4" />
+                Agents
+              </button>
+              <button
+                onClick={() => signOut(auth)}
+                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
+            </>
+          ) : (
             <button
-              onClick={() => setShowTemplates(true)}
-              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={() => setShowAuthModal(true)}
+              className="flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-base font-medium text-background transition-colors hover:bg-foreground/90"
             >
-              <Bot className="h-4 w-4" />
-              Agents
+              Sign in
             </button>
-            <button
-              onClick={() => signOut(auth)}
-              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </nav>
     </>
   );

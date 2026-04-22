@@ -89,12 +89,17 @@ model DashboardLayout {
 
 model EvalPrompt {
   id         String   @id @default(cuid())
-  name       String   @unique  // "hallucination", "citation", "tool_calling", or custom
+  name       String   // "hallucination", "citation", "tool_calling", or custom
+  projectId  String?  // null = global (built-in), set = project-specific custom eval
   evalType   String   @default("llm_prompt") // "llm_prompt" | "code_rule" | "builtin"
+  outputMode String   @default("score")      // "score" | "binary"
   template   String   @default("")           // prompt text for llm_prompt, empty for code_rule
-  ruleConfig String   @default("{}")         // JSON rule config for code_rule type
-  isCustom   Boolean  @default(false)
+  ruleConfig  String   @default("{}")         // JSON rule config for code_rule type
+  badgeLabel  String   @default("")           // short name for annotation badge (e.g. "HAL", "CIT")
+  isCustom    Boolean  @default(false)
   updatedAt  DateTime @updatedAt
+
+  @@unique([name, projectId])
 }
 
 model ProjectEvalConfig {
@@ -130,4 +135,55 @@ model AgentTemplate {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   configs     AgentConfig[]
+}
+
+model Dataset {
+  id            String       @id @default(cuid())
+  name          String
+  fileName      String       @default("")
+  headers       String       @default("[]")
+  queryCol      String       @default("")
+  contextCol    String       @default("")
+  evalNames     String       @default("[]")
+  evalOverrides String       @default("{}")
+  rowCount      Int          @default(0)
+  rows          String       @default("[]") // deprecated — kept for backward compat
+  datasetRows   DatasetRow[]
+  runs          DatasetRun[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model DatasetRow {
+  id        String  @id @default(cuid())
+  datasetId String
+  rowIndex  Int
+  data      String  @default("{}")
+  dataset   Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@index([datasetId, rowIndex])
+}
+
+model DatasetRun {
+  id          String          @id @default(cuid())
+  datasetId   String
+  dataset     Dataset         @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  agentSource String          @default("")
+  evalNames   String          @default("[]")
+  status      String          @default("running")
+  rowResults  String          @default("[]") // deprecated — kept for backward compat
+  results     DatasetRunResult[]
+  createdAt   DateTime        @default(now())
+}
+
+model DatasetRunResult {
+  id        String     @id @default(cuid())
+  runId     String
+  rowIdx    Int
+  response  String     @default("")
+  query     String     @default("")
+  evals     String     @default("{}") // JSON: Record<string, {label, score, explanation}>
+  run       DatasetRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, rowIdx])
 }

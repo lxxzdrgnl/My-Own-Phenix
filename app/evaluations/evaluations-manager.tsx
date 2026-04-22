@@ -16,8 +16,12 @@ import {
   X,
   FlaskConical,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { RuleBuilder, DEFAULT_RULE_CONFIG, type RuleConfig } from "@/components/rule-builder";
+import { PromptBuilder, parsePromptToConfig, generatePromptMessages } from "@/components/prompt-builder";
+import { DateRangePicker, getPresetRange, type DateRange } from "@/components/ui/date-range-picker";
+import { refreshBadgeLabels } from "@/components/annotation-badge";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -25,8 +29,10 @@ interface EvalPrompt {
   id: string;
   name: string;
   evalType: string; // "llm_prompt" | "code_rule" | "builtin"
+  outputMode: string; // "score" | "binary"
   template: string;
   ruleConfig: string; // JSON
+  badgeLabel: string;
   isCustom: boolean;
 }
 
@@ -63,74 +69,11 @@ const BUILT_IN_TYPES: Record<string, string> = Object.fromEntries(
   BUILT_IN_EVAL_DEFS.map((e) => [e.name, e.defaultType]),
 );
 
-const DEFAULT_RULE_CONFIGS: Record<string, RuleConfig> = {
-  banned_word: {
-    rules: [{ check: "response", op: "contains_any", value: "fuck, shit", caseSensitive: false }],
-    logic: "any",
-    match: { label: "detected", score: 1.0 },
-    clean: { label: "clean", score: 0.0 },
-  },
-};
 
-const DEFAULT_TEMPLATES: Record<string, string> = {
-  hallucination: `You are an expert at detecting factual errors and fabricated information in AI responses.
+const NEW_EVAL_TEMPLATE = `You are an expert AI response evaluator.
 
-Determine whether the RESPONSE contains **factually incorrect or fabricated information**.
-
-CONTEXT:
-{context}
-
-RESPONSE:
-{response}
-
-Important distinctions:
-- Information beyond the CONTEXT is NOT automatically hallucination.
-- Only flag if the RESPONSE states something **factually wrong**, **invents non-existent specifics**, or **directly contradicts** the CONTEXT.
-
-Scoring:
-- 0.0: No hallucination — factually accurate
-- 0.3: Minor issue — slight inaccuracy
-- 0.6: Significant — fabricated specifics
-- 1.0: Complete hallucination
-
-Respond with JSON only: {{"label": "factual" or "hallucinated", "score": 0.0-1.0, "explanation": "one line"}}`,
-
-  citation: `You are an expert at evaluating context faithfulness.
-
-Determine whether all claims in the RESPONSE are grounded in the CONTEXT.
-
-CONTEXT:
-{context}
-
-RESPONSE:
-{response}
-
-Scoring:
-- 1.0: Fully grounded
-- 0.7-0.9: Mostly grounded
-- 0.4-0.6: Partially grounded
-- 0.0-0.3: Mostly ungrounded
-
-Respond with JSON only: {{"label": "faithful" or "unfaithful", "score": 0.0-1.0, "explanation": "one line"}}`,
-
-  tool_calling: `You are an expert at evaluating tool usage appropriateness.
-
-User query:
-{query}
-
-Retrieved context:
-{context}
-
-Scoring:
-- 1.0: Clearly relevant query — retrieval appropriate
-- 0.7: Related but indirect
-- 0.3: Tangentially related
-- 0.0: Completely unrelated
-
-Respond with JSON only: {{"label": "appropriate" or "inappropriate", "score": 0.0-1.0, "explanation": "one line"}}`,
-};
-
-const NEW_EVAL_TEMPLATE = `You are an expert evaluator.
+Evaluate the quality of the RESPONSE based on the given CONTEXT and QUERY.
+Consider accuracy, relevance, completeness, and faithfulness to the provided context.
 
 CONTEXT:
 {context}
@@ -142,9 +85,11 @@ RESPONSE:
 {response}
 
 Scoring:
-- 0.0: Worst
-- 0.5: Middle
-- 1.0: Best
+- 1.0: Excellent — accurate, relevant, complete, and well-grounded
+- 0.7-0.9: Good — mostly accurate with minor issues
+- 0.4-0.6: Fair — partially correct but has notable gaps or inaccuracies
+- 0.1-0.3: Poor — mostly incorrect or irrelevant
+- 0.0: Completely wrong or off-topic
 
 Respond with JSON only: {{"label": "pass" or "fail", "score": 0.0-1.0, "explanation": "one line"}}`;
 
@@ -158,13 +103,18 @@ export function EvaluationsManager() {
   const [loading, setLoading] = useState(true);
 
   // Selection
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [selectedProject, setSelectedProjectState] = useState<string | null>(null);
+  const setSelectedProject = (name: string | null) => {
+    setSelectedProjectState(name);
+    if (name) localStorage.setItem("last_eval_project", name);
+  };
   const [selectedEval, setSelectedEval] = useState<string | null>(null);
 
   // Editor
   const [editTemplate, setEditTemplate] = useState("");
   const [editEvalType, setEditEvalType] = useState<string>("llm_prompt");
   const [editRuleConfig, setEditRuleConfig] = useState<RuleConfig>(DEFAULT_RULE_CONFIG);
+  const [editBadgeLabel, setEditBadgeLabel] = useState("");
   const [isProjectOverride, setIsProjectOverride] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -174,12 +124,20 @@ export function EvaluationsManager() {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<string>("llm_prompt");
 
+  // Test & Backfill tabs
+  const [testTab, setTestTab] = useState<"test" | "backfill">("test");
+
   // Test
-  const [testContext, setTestContext] = useState("");
-  const [testQuery, setTestQuery] = useState("");
-  const [testResponse, setTestResponse] = useState("");
+  const [testContext, setTestContext] = useState("The Eiffel Tower is located in Paris, France. It was constructed in 1889 and stands 330 meters tall. It was designed by Gustave Eiffel's engineering company.");
+  const [testQuery, setTestQuery] = useState("How tall is the Eiffel Tower and where is it located?");
+  const [testResponse, setTestResponse] = useState("The Eiffel Tower is 330 meters tall and is located in Paris, France. It was built in 1889 by Gustave Eiffel.");
   const [testResult, setTestResult] = useState<{ label: string; score: number; explanation: string } | null>(null);
   const [testing, setTesting] = useState(false);
+
+  // Backfill
+  const [backfillRange, setBackfillRange] = useState<DateRange>(() => getPresetRange(7));
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ evaluated: number; skipped: number; total: number } | null>(null);
 
   // All eval names
   const allEvalNames = [
@@ -192,24 +150,28 @@ export function EvaluationsManager() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [ps, promptsRes] = await Promise.all([
-        fetchProjects(),
-        fetch("/api/eval-prompts").then((r) => r.json()),
-      ]);
+      const ps = await fetchProjects();
       setProjects(ps);
-      setGlobalPrompts(promptsRes.prompts ?? []);
-      if (ps.length > 0 && !selectedProject) setSelectedProject(ps[0].name);
+      if (ps.length > 0 && !selectedProject) {
+        const saved = localStorage.getItem("last_eval_project");
+        const initial = saved && ps.some((p) => p.name === saved) ? saved : ps[0].name;
+        setSelectedProjectState(initial);
+      }
     } catch (e) {
       console.error(e);
     }
     setLoading(false);
-  }, [selectedProject]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadProjectConfig = useCallback(async (pid: string) => {
     try {
-      const res = await fetch(`/api/eval-config?projectId=${encodeURIComponent(pid)}`);
-      const data = await res.json();
-      setProjectConfigs(data.configs ?? []);
+      const [configRes, promptsRes] = await Promise.all([
+        fetch(`/api/eval-config?projectId=${encodeURIComponent(pid)}`).then((r) => r.json()),
+        fetch(`/api/eval-prompts?projectId=${encodeURIComponent(pid)}`).then((r) => r.json()),
+      ]);
+      setProjectConfigs(configRes.configs ?? []);
+      setGlobalPrompts(promptsRes.prompts ?? []);
     } catch {}
   }, []);
 
@@ -229,14 +191,15 @@ export function EvaluationsManager() {
     // Determine eval type: saved > built-in default > llm_prompt
     const evalType = globalCustom?.evalType ?? BUILT_IN_TYPES[name] ?? "llm_prompt";
     setEditEvalType(evalType);
+    setEditBadgeLabel(globalCustom?.badgeLabel ?? "");
 
     // Load rule config
     if (evalType === "code_rule") {
       try {
         const saved = globalCustom?.ruleConfig ? JSON.parse(globalCustom.ruleConfig) : null;
-        setEditRuleConfig(saved?.rules ? saved : DEFAULT_RULE_CONFIGS[name] ?? DEFAULT_RULE_CONFIG);
+        setEditRuleConfig(saved?.rules ? saved : DEFAULT_RULE_CONFIG);
       } catch {
-        setEditRuleConfig(DEFAULT_RULE_CONFIGS[name] ?? DEFAULT_RULE_CONFIG);
+        setEditRuleConfig(DEFAULT_RULE_CONFIG);
       }
     }
 
@@ -245,7 +208,7 @@ export function EvaluationsManager() {
       setEditTemplate(projectConfig.template);
       setIsProjectOverride(true);
     } else {
-      setEditTemplate(globalCustom?.template ?? DEFAULT_TEMPLATES[name] ?? "");
+      setEditTemplate(globalCustom?.template ?? "");
       setIsProjectOverride(false);
     }
   }
@@ -256,19 +219,33 @@ export function EvaluationsManager() {
     if (!selectedProject) return;
     const config = projectConfigs.find((c) => c.evalName === evalName);
     const currentEnabled = config ? config.enabled : true;
+    const newEnabled = !currentEnabled;
+
+    // Optimistic update — immediately reflect in UI
+    setProjectConfigs((prev) => {
+      const exists = prev.some((c) => c.evalName === evalName);
+      if (exists) {
+        return prev.map((c) => (c.evalName === evalName ? { ...c, enabled: newEnabled } : c));
+      }
+      return [...prev, { id: `temp-${evalName}`, projectId: selectedProject, evalName, enabled: newEnabled, template: null }];
+    });
+
     try {
       await fetch("/api/eval-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: selectedProject, evalName, enabled: !currentEnabled }),
+        body: JSON.stringify({ projectId: selectedProject, evalName, enabled: newEnabled }),
       });
-      await loadProjectConfig(selectedProject);
     } catch {}
+    // Sync with server
+    loadProjectConfig(selectedProject);
   }
 
   function isEnabled(name: string): boolean {
     const c = projectConfigs.find((c) => c.evalName === name);
-    return c ? c.enabled : true;
+    if (c) return c.enabled;
+    // Built-in evals default to enabled, custom evals default to disabled
+    return BUILT_IN_EVALS.includes(name);
   }
 
   // ── Save ──
@@ -276,20 +253,25 @@ export function EvaluationsManager() {
   async function handleSaveGlobal() {
     if (!selectedEval) return;
     setSaving(true);
+    const isCustom = !BUILT_IN_EVALS.includes(selectedEval);
     try {
       await fetch("/api/eval-prompts", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: selectedEval,
+          projectId: isCustom ? null : null,
           evalType: editEvalType,
+          outputMode: /"score":\s*0\.0-1\.0/.test(editTemplate) ? "score" : "binary",
           template: editTemplate,
           ruleConfig: editEvalType === "code_rule" ? editRuleConfig : undefined,
-          isCustom: !BUILT_IN_EVALS.includes(selectedEval),
+          badgeLabel: editBadgeLabel,
+          isCustom,
         }),
       });
       setDirty(false);
-      await loadAll();
+      if (selectedProject) await loadProjectConfig(selectedProject);
+      refreshBadgeLabels();
     } catch {}
     setSaving(false);
   }
@@ -330,47 +312,104 @@ export function EvaluationsManager() {
       await loadProjectConfig(selectedProject);
       // Reload with global template
       const globalCustom = globalPrompts.find((p) => p.name === selectedEval);
-      setEditTemplate(globalCustom?.template ?? DEFAULT_TEMPLATES[selectedEval] ?? "");
+      setEditTemplate(globalCustom?.template ?? "");
       setDirty(false);
     } catch {}
   }
 
   async function handleResetDefault() {
-    if (!selectedEval || !DEFAULT_TEMPLATES[selectedEval]) return;
-    setEditTemplate(DEFAULT_TEMPLATES[selectedEval]);
-    setDirty(true);
+    if (!selectedEval) return;
+    // Reload original template from DB
+    const globalCustom = globalPrompts.find((p) => p.name === selectedEval);
+    if (globalCustom?.template) {
+      setEditTemplate(globalCustom.template);
+      setDirty(false);
+    }
   }
 
   async function handleDelete() {
-    if (!selectedEval) return;
+    if (!selectedEval || !selectedProject) return;
     if (!confirm(`Delete "${selectedEval}"?`)) return;
+
+    const deleteAnnotations = confirm(
+      "Also delete existing annotations from Phoenix?\n\nOK = Delete annotations too\nCancel = Keep annotations, only remove eval config",
+    );
+
     try {
       await fetch(`/api/eval-prompts?name=${encodeURIComponent(selectedEval)}`, { method: "DELETE" });
+      if (deleteAnnotations) {
+        for (const p of projects) {
+          try {
+            await fetch(`/api/phoenix?path=${encodeURIComponent(`/v1/projects/${p.name}/span_annotations`)}`, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: selectedEval }),
+            });
+          } catch {}
+        }
+      }
       setSelectedEval(null);
-      await loadAll();
+      await loadProjectConfig(selectedProject);
     } catch {}
+  }
+
+  async function handleBackfill() {
+    if (!selectedEval || !selectedProject) return;
+    setBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const res = await fetch("/api/eval-backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: selectedProject,
+          evalName: selectedEval,
+          startDate: backfillRange.from.toISOString().split("T")[0],
+          endDate: backfillRange.to.toISOString().split("T")[0],
+        }),
+      });
+      const data = await res.json();
+      setBackfillResult(data);
+    } catch (e) {
+      setBackfillResult({ evaluated: 0, skipped: 0, total: 0 });
+    }
+    setBackfilling(false);
   }
 
   async function handleCreate() {
     const name = newName.trim().toLowerCase().replace(/\s+/g, "_");
-    if (!name) return;
+    if (!name || !selectedProject) return;
     try {
+      // Create globally (visible to all projects)
       await fetch("/api/eval-prompts", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
+          projectId: null,
           evalType: newType,
           template: newType === "llm_prompt" ? NEW_EVAL_TEMPLATE : "",
           ruleConfig: newType === "code_rule" ? DEFAULT_RULE_CONFIG : undefined,
           isCustom: true,
         }),
       });
+      // Enable only for the current project
+      await fetch("/api/eval-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: selectedProject, evalName: name, enabled: true }),
+      });
       setNewName("");
       setNewType("llm_prompt");
       setCreating(false);
-      await loadAll();
-      selectEval(name);
+      await loadProjectConfig(selectedProject);
+      setSelectedEval(name);
+      setEditEvalType(newType);
+      setEditTemplate(newType === "llm_prompt" ? NEW_EVAL_TEMPLATE : "");
+      setEditRuleConfig(newType === "code_rule" ? DEFAULT_RULE_CONFIG : DEFAULT_RULE_CONFIG);
+      setIsProjectOverride(false);
+      setDirty(false);
+      setTestResult(null);
     } catch {}
   }
 
@@ -381,18 +420,39 @@ export function EvaluationsManager() {
     setTesting(true);
     setTestResult(null);
     try {
-      const prompt = editTemplate
-        .replace(/\{context\}/g, testContext || "(no context)")
-        .replace(/\{response\}/g, testResponse || "(no response)")
-        .replace(/\{query\}/g, testQuery || "(no query)");
+      const replacePlaceholders = (text: string) =>
+        text
+          .replace(/\{context\}/g, testContext || "(no context)")
+          .replace(/\{response\}/g, testResponse || "(no response)")
+          .replace(/\{query\}/g, testQuery || "(no query)");
+
+      // Try to parse config for system/user split; fallback to single user message
+      const evalConfig = parsePromptToConfig(editTemplate);
+      let messages;
+      if (evalConfig) {
+        const { system, user } = generatePromptMessages(evalConfig);
+        messages = [
+          { role: "system", content: replacePlaceholders(system) },
+          { role: "user", content: replacePlaceholders(user) },
+        ];
+      } else {
+        messages = [{ role: "user", content: replacePlaceholders(editTemplate) }];
+      }
+
       const res = await fetch("/api/llm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0 }),
+        body: JSON.stringify({ model: "gpt-4o-mini", messages, temperature: 0 }),
       });
       const data = await res.json();
-      const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
-      setTestResult({ label: parsed.label ?? "", score: parsed.score ?? 0, explanation: parsed.explanation ?? "" });
+      const result = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+      // Binary mode: no score in response, derive from label
+      const isBinary = result.score === undefined;
+      const PASS_LABELS = ["pass", "true", "yes", "correct", "factual", "faithful", "appropriate", "clean", "relevant"];
+      const score = isBinary
+        ? (PASS_LABELS.includes(String(result.label).toLowerCase()) ? 1.0 : 0.0)
+        : (result.score ?? 0);
+      setTestResult({ label: result.label ?? "", score, explanation: result.explanation ?? "" });
     } catch (e) {
       setTestResult({ label: "error", score: 0, explanation: String(e) });
     }
@@ -481,9 +541,9 @@ export function EvaluationsManager() {
                         return (
                           <span className={cn(
                             "shrink-0 rounded px-1 py-0.5 text-[8px] font-bold uppercase",
-                            t === "code_rule" ? "bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400"
-                              : t === "builtin" ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
-                              : "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                            t === "code_rule" ? "bg-muted text-muted-foreground"
+                              : t === "builtin" ? "bg-foreground/10 text-foreground/70"
+                              : "bg-foreground text-background"
                           )}>
                             {t === "code_rule" ? "rule" : t === "builtin" ? "built-in" : "llm"}
                           </span>
@@ -526,8 +586,8 @@ export function EvaluationsManager() {
                           <span className={cn("text-sm flex-1 truncate", !enabled && "text-muted-foreground")}>{p.name}</span>
                           <span className={cn(
                             "shrink-0 rounded px-1 py-0.5 text-[8px] font-bold uppercase",
-                            p.evalType === "code_rule" ? "bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400"
-                              : "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                            p.evalType === "code_rule" ? "bg-muted text-muted-foreground"
+                              : "bg-foreground text-background"
                           )}>
                             {p.evalType === "code_rule" ? "rule" : "llm"}
                           </span>
@@ -630,89 +690,102 @@ export function EvaluationsManager() {
             <p className="text-sm">Select an evaluation to edit its prompt</p>
           </div>
         ) : (
-          <div className="mx-auto max-w-3xl p-6">
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-3xl p-6">
             {/* Header */}
-            <div className="mb-5 flex items-start justify-between">
-              <div>
-                <h1 className="text-lg font-bold tracking-tight">{selectedEval}</h1>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {isProjectOverride ? (
-                    <span>Project override for <span className="font-semibold">{selectedProject}</span></span>
-                  ) : (
-                    <span>Global default {isBuiltIn ? "(built-in)" : "(custom)"}</span>
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2.5">
+                  <h1 className="text-lg font-bold tracking-tight">{selectedEval}</h1>
+                  <span className={cn(
+                    "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase",
+                    editEvalType === "llm_prompt" ? "bg-foreground/8 text-foreground/60" :
+                    editEvalType === "code_rule" ? "bg-foreground/8 text-foreground/60" :
+                    "bg-foreground/8 text-foreground/60"
+                  )}>
+                    {editEvalType === "llm_prompt" ? "LLM" : editEvalType === "code_rule" ? "Rule" : "Built-in"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {isProjectOverride && (
+                    <Button size="sm" variant="ghost" onClick={handleClearOverride} className="gap-1 text-xs h-7">
+                      <X className="size-3" /> Remove Override
+                    </Button>
                   )}
-                </p>
+                  {isBuiltIn && !isProjectOverride && (
+                    <Button size="sm" variant="ghost" onClick={handleResetDefault} className="gap-1 text-xs h-7">
+                      <RotateCcw className="size-3" /> Reset
+                    </Button>
+                  )}
+                  {!isBuiltIn && (
+                    <Button size="sm" variant="ghost" onClick={handleDelete} className="gap-1 text-xs h-7 text-red-600">
+                      <Trash2 className="size-3" />
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                {isProjectOverride && (
-                  <Button size="sm" variant="ghost" onClick={handleClearOverride} className="gap-1 text-xs">
-                    <X className="size-3" /> Remove Override
-                  </Button>
-                )}
-                {isBuiltIn && !isProjectOverride && (
-                  <Button size="sm" variant="ghost" onClick={handleResetDefault} className="gap-1 text-xs">
-                    <RotateCcw className="size-3" /> Reset Default
-                  </Button>
-                )}
-                {!isBuiltIn && (
-                  <Button size="sm" variant="ghost" onClick={handleDelete} className="gap-1 text-xs text-red-600">
-                    <Trash2 className="size-3" /> Delete
+
+              {/* Scope + Save bar */}
+              <div className="flex items-center gap-2 rounded-md border bg-muted/20 px-2.5 py-1.5">
+                <span className="text-[10px] text-muted-foreground shrink-0">Scope:</span>
+                <div className="flex gap-0.5">
+                  <button
+                    onClick={() => { if (isProjectOverride) handleClearOverride(); }}
+                    className={cn(
+                      "rounded px-2 py-1 text-[10px] font-medium transition-colors",
+                      !isProjectOverride ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    All Projects
+                  </button>
+                  <button
+                    onClick={() => setIsProjectOverride(true)}
+                    className={cn(
+                      "rounded px-2 py-1 text-[10px] font-medium transition-colors",
+                      isProjectOverride ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {selectedProject}
+                  </button>
+                </div>
+                {dirty && (
+                  <Button
+                    size="sm"
+                    onClick={isProjectOverride ? handleSaveProject : handleSaveGlobal}
+                    disabled={saving}
+                    className="ml-auto h-6 text-[10px] px-3"
+                  >
+                    {saving ? "Saving..." : "Save"}
                   </Button>
                 )}
               </div>
             </div>
 
-            {/* Scope selector */}
-            <div className="mb-4 flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
-              <span className="text-xs text-muted-foreground">Save to:</span>
-              <div className="flex gap-1">
-                <Button
-                  size="sm"
-                  variant={!isProjectOverride ? "default" : "ghost"}
-                  onClick={() => {
-                    if (isProjectOverride) handleClearOverride();
-                  }}
-                  className="h-6 text-[11px] px-2"
-                >
-                  Global (all projects)
-                </Button>
-                <Button
-                  size="sm"
-                  variant={isProjectOverride ? "default" : "ghost"}
-                  onClick={() => setIsProjectOverride(true)}
-                  className="h-6 text-[11px] px-2"
-                >
-                  {selectedProject} only
-                </Button>
+            {/* Backfill — run on existing traces */}
+            <div className="mb-5 flex items-center gap-3 rounded-lg border bg-muted/10 px-4 py-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <RefreshCw className={cn("size-3.5 text-muted-foreground shrink-0", backfilling && "animate-spin")} />
+                  <span className="text-xs font-semibold">Run on Existing Traces</span>
+                  {backfillResult && (
+                    <span className="text-[10px] text-muted-foreground ml-auto tabular-nums">
+                      {backfillResult.evaluated} evaluated, {backfillResult.skipped} skipped / {backfillResult.total}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <DateRangePicker value={backfillRange} onChange={setBackfillRange} />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleBackfill}
+                    disabled={backfilling || !editTemplate}
+                    className="gap-1.5 text-xs h-8 shrink-0"
+                  >
+                    {backfilling ? "Running..." : "Run"}
+                  </Button>
+                </div>
               </div>
-              {dirty && (
-                <Button
-                  size="sm"
-                  onClick={isProjectOverride ? handleSaveProject : handleSaveGlobal}
-                  disabled={saving}
-                  className="ml-auto h-6 text-[11px] px-3"
-                >
-                  {saving ? "Saving..." : "Save"}
-                </Button>
-              )}
-            </div>
-
-            {/* Type badge */}
-            <div className="mb-4 flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Type:</span>
-              <span className={cn(
-                "rounded px-2 py-0.5 text-[10px] font-bold uppercase",
-                editEvalType === "llm_prompt" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                editEvalType === "code_rule" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
-                "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-              )}>
-                {editEvalType === "llm_prompt" ? "LLM Prompt" : editEvalType === "code_rule" ? "Code Rule" : "Built-in"}
-              </span>
-              {editEvalType === "builtin" && (
-                <span className="text-[10px] text-muted-foreground">
-                  Phoenix evaluator — override with custom prompt below
-                </span>
-              )}
             </div>
 
             {/* Editor — changes by eval type */}
@@ -756,26 +829,17 @@ Evaluate and respond with JSON only: {{"label": "pass" or "fail", "score": 0.0-1
               </div>
             ) : (
               <div className="mb-5">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                    Prompt Template
-                  </label>
-                  <span className="text-[10px] text-muted-foreground">
-                    Placeholders: <code className="rounded bg-muted px-1">{"{context}"}</code>{" "}
-                    <code className="rounded bg-muted px-1">{"{response}"}</code>{" "}
-                    <code className="rounded bg-muted px-1">{"{query}"}</code>
-                  </span>
-                </div>
-                <Textarea
-                  value={editTemplate}
-                  onChange={(e) => { setEditTemplate(e.target.value); setDirty(true); }}
-                  rows={14}
-                  className="font-mono text-xs leading-relaxed"
+                <PromptBuilder
+                  template={editTemplate}
+                  evalName={selectedEval}
+                  badgeLabel={editBadgeLabel}
+                  onChange={(t) => { setEditTemplate(t); setDirty(true); }}
+                  onBadgeLabelChange={(l) => { setEditBadgeLabel(l); setDirty(true); }}
                 />
               </div>
             )}
 
-            {/* Test panel */}
+            {/* Test */}
             <div className="rounded-lg border p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold flex items-center gap-1.5">
@@ -785,7 +849,6 @@ Evaluate and respond with JSON only: {{"label": "pass" or "fail", "score": 0.0-1
                   {testing ? "Running..." : "Run"}
                 </Button>
               </div>
-
               <div className="grid grid-cols-3 gap-2 mb-3">
                 <div>
                   <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Context</label>
@@ -800,22 +863,29 @@ Evaluate and respond with JSON only: {{"label": "pass" or "fail", "score": 0.0-1
                   <Textarea value={testResponse} onChange={(e) => setTestResponse(e.target.value)} rows={3} placeholder="..." className="text-xs" />
                 </div>
               </div>
+              {testResult && (() => {
+                const PASS_LABELS = ["pass", "true", "yes", "correct", "factual", "faithful", "appropriate", "clean", "relevant"];
+                const isPass = PASS_LABELS.includes(String(testResult.label).toLowerCase()) || testResult.score >= 0.5;
+                const isBinary = !/"score":\s*0\.0-1\.0/.test(editTemplate);
+                return (
+                  <div className="rounded-md border bg-muted/20 p-3 flex items-center gap-3 text-sm">
+                    <span className={cn(
+                      "rounded px-2 py-0.5 text-xs font-bold",
+                      testResult.label === "error" ? "bg-muted text-destructive"
+                        : isPass ? "bg-muted text-foreground"
+                        : "bg-muted text-destructive"
+                    )}>
+                      {testResult.label}
+                    </span>
+                    {!isBinary && (
+                      <span className="tabular-nums font-mono text-xs">{testResult.score.toFixed(2)}</span>
+                    )}
+                    <span className="text-xs text-muted-foreground flex-1">{testResult.explanation}</span>
+                  </div>
+                );
+              })()}
+            </div>
 
-              {testResult && (
-                <div className="rounded-md border bg-muted/20 p-3 flex items-center gap-3 text-sm">
-                  <span className={cn(
-                    "rounded px-2 py-0.5 text-xs font-bold",
-                    testResult.label === "error" ? "bg-red-100 text-red-700"
-                      : testResult.score <= 0.3 ? "bg-emerald-100 text-emerald-700"
-                      : testResult.score >= 0.6 ? "bg-red-100 text-red-700"
-                      : "bg-amber-100 text-amber-700"
-                  )}>
-                    {testResult.label}
-                  </span>
-                  <span className="tabular-nums font-mono text-xs">{testResult.score.toFixed(2)}</span>
-                  <span className="text-xs text-muted-foreground flex-1">{testResult.explanation}</span>
-                </div>
-              )}
             </div>
           </div>
         )}

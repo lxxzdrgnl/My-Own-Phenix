@@ -133,7 +133,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
       {open && (
         <div
           className={cn(
-            "absolute right-0 z-50 mt-2 rounded-lg border bg-popover p-3 shadow-md",
+            "absolute left-0 z-50 mt-2 rounded-lg border bg-popover p-3 shadow-md",
             "animate-in fade-in-0 zoom-in-95"
           )}
         >

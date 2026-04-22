@@ -107,26 +107,29 @@ def phoenix_upload_annotation(span_id: str, name: str, kind: str, label: str, sc
 
 class EvalDef:
     """Eval definition loaded from dashboard."""
-    def __init__(self, name: str, eval_type: str, template: str, rule_config: dict):
+    def __init__(self, name: str, eval_type: str, template: str, rule_config: dict, output_mode: str = "score"):
         self.name = name
         self.eval_type = eval_type  # "llm_prompt" | "code_rule" | "builtin"
         self.template = template
         self.rule_config = rule_config
+        self.output_mode = output_mode  # "score" | "binary"
 
-_eval_defs: dict[str, EvalDef] | None = None
-_eval_defs_loaded_at: float = 0
+_eval_defs: dict[str, dict[str, EvalDef]] = {}  # project → {name → EvalDef}
+_eval_defs_loaded_at: dict[str, float] = {}
 _project_configs: dict[str, dict[str, bool]] = {}  # project → {eval_name → enabled}
 _project_configs_loaded_at: dict[str, float] = {}
 
 
-def _load_eval_defs() -> dict[str, EvalDef]:
-    """Load all eval definitions from dashboard API. Refresh every 60s."""
-    global _eval_defs, _eval_defs_loaded_at
+def _load_eval_defs(project: str = "") -> dict[str, EvalDef]:
+    """Load eval definitions for a project from dashboard API. Refresh every 60s."""
     now = time.time()
-    if _eval_defs is not None and now - _eval_defs_loaded_at < 60:
-        return _eval_defs
+    if project in _eval_defs and now - _eval_defs_loaded_at.get(project, 0) < 60:
+        return _eval_defs[project]
     try:
-        resp = httpx.get(f"{DASHBOARD_URL}/api/eval-prompts", timeout=5)
+        url = f"{DASHBOARD_URL}/api/eval-prompts"
+        if project:
+            url += f"?projectId={project}"
+        resp = httpx.get(url, timeout=5)
         if resp.status_code == 200:
             defs = {}
             for p in resp.json().get("prompts", []):
@@ -140,16 +143,15 @@ def _load_eval_defs() -> dict[str, EvalDef]:
                     eval_type=p.get("evalType", "llm_prompt"),
                     template=p.get("template", ""),
                     rule_config=rc,
+                    output_mode=p.get("outputMode", "score"),
                 )
-            _eval_defs = defs
-            _eval_defs_loaded_at = now
-            logger.info("Loaded %d eval definitions from dashboard", len(defs))
+            _eval_defs[project] = defs
+            _eval_defs_loaded_at[project] = now
+            logger.info("Loaded %d eval definitions for project '%s'", len(defs), project or "global")
             return defs
     except Exception:
         pass
-    if _eval_defs is None:
-        _eval_defs = {}
-    return _eval_defs
+    return _eval_defs.get(project, {})
 
 
 def _load_project_config(project: str) -> dict[str, bool]:
@@ -172,33 +174,43 @@ def _load_project_config(project: str) -> dict[str, bool]:
 
 def get_enabled_evals(project: str) -> set[str]:
     """Returns set of eval names enabled for this project."""
-    defs = _load_eval_defs()
+    defs = _load_eval_defs(project)
     config = _load_project_config(project)
 
-    # All known evals (built-in + custom)
+    # All known evals (built-in + custom from dashboard)
     all_evals = set(BUILT_IN_EVALS) | set(defs.keys())
 
     enabled = set()
     for name in all_evals:
-        # If project has explicit config, use it; otherwise default enabled
         if name in config:
             if config[name]:
                 enabled.add(name)
         else:
-            enabled.add(name)
+            # Built-in evals default to enabled, custom evals default to disabled
+            if name in BUILT_IN_EVALS:
+                enabled.add(name)
     return enabled
 
 
+# Current project context for get_prompt/get_eval_def
+_current_project: str = ""
+
+
+def set_current_project(project: str) -> None:
+    global _current_project
+    _current_project = project
+
+
 def get_prompt(name: str, default: str) -> str:
-    """Get prompt template: custom from dashboard > default."""
-    defs = _load_eval_defs()
+    """Get prompt template: dashboard > default."""
+    defs = _load_eval_defs(_current_project)
     if name in defs and defs[name].template:
         return defs[name].template
     return default
 
 
 def get_eval_def(name: str) -> EvalDef | None:
-    defs = _load_eval_defs()
+    defs = _load_eval_defs(_current_project)
     return defs.get(name)
 
 
@@ -463,12 +475,19 @@ def _eval_code_rule(rule_config: dict, query: str, response: str, context: str, 
 
 # ── Evaluators ────────────────────────────────────────────────────────────
 
-def _openai_eval(prompt_text: str) -> dict:
+PASS_LABELS = {"pass", "true", "yes", "correct", "factual", "faithful", "appropriate", "clean", "relevant"}
+
+
+def _openai_eval(prompt_text: str, system_msg: str | None = None) -> dict:
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
+        messages = []
+        if system_msg:
+            messages.append({"role": "system", "content": system_msg})
+        messages.append({"role": "user", "content": prompt_text})
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt_text}],
+            messages=messages,
             response_format={"type": "json_object"},
             temperature=0,
         )
@@ -478,37 +497,78 @@ def _openai_eval(prompt_text: str) -> dict:
         return {}
 
 
-def eval_banned_word(response: str) -> dict:
+def _parse_eval_result(r: dict, output_mode: str = "score") -> dict:
+    """Normalize eval result, handling binary mode (no score in response)."""
+    if not r:
+        return {}
+    label = str(r.get("label", ""))
+    explanation = str(r.get("explanation", ""))
+    if output_mode == "binary" or "score" not in r:
+        score = 1.0 if label.lower() in PASS_LABELS else 0.0
+    else:
+        score = float(r.get("score", 0.0))
+    return {"label": label, "score": score, "explanation": explanation}
+
+
+def _split_prompt_for_system(template: str) -> tuple[str | None, str]:
+    """Split template into system message (role+task) and user message (data+format).
+    Returns (system_msg, user_msg). If can't split, returns (None, full_template)."""
+    lines = template.split("\n")
+    # Find where data section starts (CONTEXT:/QUERY:/RESPONSE:)
+    data_start = -1
+    for i, line in enumerate(lines):
+        if line.strip() in ("CONTEXT:", "QUERY:", "RESPONSE:"):
+            data_start = i
+            break
+    if data_start <= 0:
+        return None, template
+    system = "\n".join(lines[:data_start]).strip()
+    user = "\n".join(lines[data_start:]).strip()
+    return system, user
+
+
+def eval_banned_word(response: str, query: str = "", context: str = "", span: dict | None = None) -> dict:
+    """Run banned_word eval. Uses dashboard rule config if available, else default regex."""
+    edef = get_eval_def("banned_word")
+    if edef and edef.eval_type == "code_rule" and edef.rule_config:
+        return _eval_code_rule(edef.rule_config, query, response, context, span or {})
     m = BANNED_RE.search(response)
     return {"label": "detected" if m else "clean", "score": 1.0 if m else 0.0,
             "explanation": f"Matched: '{m.group()}'" if m else ""}
 
 
+def _run_llm_eval(name: str, default_template: str, context: str, response: str, query: str) -> dict:
+    """Run an LLM-based eval with system/user split and dashboard prompt override."""
+    template = get_prompt(name, default_template)
+    edef = get_eval_def(name)
+    output_mode = edef.output_mode if edef else "score"
+
+    filled = template.format(
+        context=context[:3000] if context else "(no context)",
+        response=response[:2000] if response else "(no response)",
+        query=query[:1000] if query else "(no query)",
+    )
+    sys_msg, user_msg = _split_prompt_for_system(filled)
+    raw = _openai_eval(user_msg, system_msg=sys_msg)
+    return _parse_eval_result(raw, output_mode)
+
+
 def eval_hallucination(response: str, context: str) -> dict:
     if not context:
         return {}
-    prompt = get_prompt("hallucination", default_prompts.HALLUCINATION)
-    r = _openai_eval(prompt.format(context=context[:3000], response=response[:2000], query=""))
-    return {"label": str(r.get("label", "factual")), "score": float(r.get("score", 0.0)),
-            "explanation": str(r.get("explanation", ""))} if r else {}
+    return _run_llm_eval("hallucination", default_prompts.HALLUCINATION, context, response, "")
 
 
 def eval_citation(response: str, context: str) -> dict:
     if not context:
         return {}
-    prompt = get_prompt("citation", default_prompts.CITATION)
-    r = _openai_eval(prompt.format(context=context[:3000], response=response[:2000], query=""))
-    return {"label": str(r.get("label", "unfaithful")), "score": float(r.get("score", 0.0)),
-            "explanation": str(r.get("explanation", ""))} if r else {}
+    return _run_llm_eval("citation", default_prompts.CITATION, context, response, "")
 
 
 def eval_tool_calling(query: str, context: str) -> dict:
     if not context:
         return {}
-    prompt = get_prompt("tool_calling", default_prompts.TOOL_CALLING)
-    r = _openai_eval(prompt.format(query=query[:1000], context=context[:1000], response=""))
-    return {"label": str(r.get("label", "inappropriate")), "score": float(r.get("score", 0.0)),
-            "explanation": str(r.get("explanation", ""))} if r else {}
+    return _run_llm_eval("tool_calling", default_prompts.TOOL_CALLING, context, "", query)
 
 
 # ── Eval pipeline ─────────────────────────────────────────────────────────
@@ -526,7 +586,7 @@ def _run_trace_evals(
 ) -> None:
     """Trace-level evals on root span."""
     if "banned_word" in missing and response:
-        r = eval_banned_word(response)
+        r = eval_banned_word(response, query, context, root_span_data)
         phoenix_upload_annotation(root_id, "banned_word", "CODE", r["label"], r["score"], r.get("explanation", ""))
 
     if "qa_correctness" in missing and query and response:
@@ -557,16 +617,17 @@ def _run_trace_evals(
                 if r:
                     phoenix_upload_annotation(root_id, eval_name, "CODE", r["label"], r["score"], r.get("explanation", ""))
             elif edef.eval_type == "llm_prompt" and edef.template:
-                prompt = edef.template.format(
+                filled = edef.template.format(
                     context=context[:2000] if context else "(no context)",
                     response=response[:2000] if response else "(no response)",
                     query=query[:1000] if query else "(no query)",
                 )
-                r = _openai_eval(prompt)
+                sys_msg, user_msg = _split_prompt_for_system(filled)
+                raw = _openai_eval(user_msg, system_msg=sys_msg)
+                r = _parse_eval_result(raw, edef.output_mode)
                 if r:
                     phoenix_upload_annotation(root_id, eval_name, "LLM",
-                        str(r.get("label", "")), float(r.get("score", 0)),
-                        str(r.get("explanation", "")))
+                        r["label"], r["score"], r["explanation"])
         except Exception as e:
             logger.error("[%s] custom eval '%s' failed: %s", project, eval_name, e)
 
@@ -737,6 +798,7 @@ def main() -> None:
             projects = phoenix_get_projects()
 
             for project in projects:
+                set_current_project(project)
                 if project not in evaluated_traces:
                     evaluated_traces[project] = set()
                     caches[project] = deque(maxlen=MAX_CACHE)

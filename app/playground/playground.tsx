@@ -23,9 +23,11 @@ import {
   Filter,
   Plus,
   X,
+  Database,
 } from "lucide-react";
 import { Nav } from "@/components/nav";
 import { AnnotationBadges } from "@/components/annotation-badge";
+import { AddToDatasetModal } from "@/components/add-to-dataset-modal";
 import { PromptEditModal } from "@/components/prompt-edit-modal";
 import { PromptsModal } from "@/components/prompts-modal";
 
@@ -66,7 +68,11 @@ function makeColumn(
 
 export function Playground() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectIdState] = useState("");
+  const setProjectId = (id: string) => {
+    setProjectIdState(id);
+    localStorage.setItem("last_playground_project", id);
+  };
   const [traces, setTraces] = useState<Trace[]>([]);
   const [selected, setSelected] = useState<Trace | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +92,7 @@ export function Playground() {
   );
   const [deleting, setDeleting] = useState(false);
   const [originalContextOpen, setOriginalContextOpen] = useState(false);
+  const [datasetModalOpen, setDatasetModalOpen] = useState(false);
   const [promptsModalOpen, setPromptsModalOpen] = useState(false);
 
   // Init first column once prompts load
@@ -255,8 +262,11 @@ export function Playground() {
       const ps = await fetchProjects();
       setProjects(ps);
       if (ps.length > 0 && !projectId) {
-        setProjectId(ps[0].id);
-        loadFilters(ps[0].id);
+        const saved = localStorage.getItem("last_playground_project");
+        const initial = saved && ps.some((p) => p.id === saved) ? saved : ps[0].id;
+        setProjectIdState(initial);
+        localStorage.setItem("last_playground_project", initial);
+        loadFilters(initial);
       }
     } catch (e) {
       console.error(e);
@@ -463,11 +473,27 @@ export function Playground() {
             {selected && (
               <div className="flex flex-col border-r" style={{ flex: "1 0 280px" }}>
                 <div className="shrink-0 border-b bg-muted/10 px-3 pt-3 pb-2">
+                  <AddToDatasetModal
+                    open={datasetModalOpen}
+                    onClose={() => setDatasetModalOpen(false)}
+                    query={selected.query}
+                    context={selected.context}
+                  />
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                       Original
                     </span>
-                    <AnnotationBadges annotations={selected.annotations} />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setDatasetModalOpen(true)}
+                        className="flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        title="Add to dataset"
+                      >
+                        <Database className="size-3" />
+                        Dataset
+                      </button>
+                      <AnnotationBadges annotations={selected.annotations} />
+                    </div>
                   </div>
 
                   {/* Query (read-only) */}

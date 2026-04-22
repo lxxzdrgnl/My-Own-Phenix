@@ -2,7 +2,7 @@
 
 import { MeasureGrid } from "./measure-grid";
 import { RmfFunctionCards } from "./rmf-function-card";
-import { computeMetrics } from "@/lib/rmf-utils";
+import { computeMetrics, computeGovernScore, computeMapScore, computeMeasureScore, computeManageScore, type RmfScores } from "@/lib/rmf-utils";
 import { StatCard } from "./stat-card";
 import { HighchartWidget } from "./highchart-widget";
 import {
@@ -19,9 +19,14 @@ const ch = (opts: Highcharts.Options, colors: WidgetColors) =>
 
 export function rmf_overview({ annotations, spans }: WidgetRenderProps) {
   const metrics = computeMetrics(spans, annotations);
-  const greenCount = metrics.filter((m) => m.status === "green").length;
-  const measureScore = Math.round((greenCount / metrics.length) * 100) || 0;
-  return <RmfFunctionCards measureScore={measureScore} />;
+  const evalNames = new Set(annotations.map((a) => a.name));
+  const scores: RmfScores = {
+    govern: computeGovernScore(evalNames.size, 6, evalNames.size > 6),
+    map: computeMapScore(metrics),
+    measure: computeMeasureScore(metrics),
+    manage: computeManageScore(0, 0, 0), // No risk data in widget context
+  };
+  return <RmfFunctionCards scores={scores} />;
 }
 
 export function rmf_measure_grid({ annotations, spans }: WidgetRenderProps) {

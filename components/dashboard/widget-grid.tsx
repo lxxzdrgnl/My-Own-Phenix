@@ -306,9 +306,11 @@ export function WidgetGrid({
   const draggingIdRef = useRef<string | null>(null);
 
   const prevLayoutsRef = React.useRef(layouts);
+  const skipNextSaveRef = React.useRef(false);
   if (prevLayoutsRef.current !== layouts) {
     prevLayoutsRef.current = layouts;
     hasLoadedRef.current = false;
+    skipNextSaveRef.current = true;
     setLocalLayouts(layouts);
   }
 
@@ -327,9 +329,28 @@ export function WidgetGrid({
     type: "vertical",
     allowOverlap: false,
     compact(layout, _cols) {
-      const saved = savedLayoutRef.current;
       const dragId = draggingIdRef.current;
-      if (!dragId || !saved.length) return layout;
+
+      // No drag — preserve positions, only resolve overlaps
+      if (!dragId) {
+        const sorted = [...layout].sort((a, b) => a.y - b.y || a.x - b.x);
+        const placed: LayoutItem[] = [];
+        for (const item of sorted) {
+          let candidate = { ...item };
+          let conflicts = getAllCollisions(placed, candidate);
+          while (conflicts.length > 0) {
+            const bottom = Math.max(...conflicts.map((c) => c.y + c.h));
+            candidate = { ...candidate, y: bottom };
+            conflicts = getAllCollisions(placed, candidate);
+          }
+          placed.push(candidate);
+        }
+        return placed;
+      }
+
+      // Drag in progress — use saved positions for non-dragged items
+      const saved = savedLayoutRef.current;
+      if (!saved.length) return layout;
       const dragItem = layout.find((l) => l.i === dragId);
       if (!dragItem) return layout;
       const others = layout
@@ -370,6 +391,7 @@ export function WidgetGrid({
             const items = layout as LayoutItem[];
             setLocalLayouts(items);
             if (!hasLoadedRef.current) { hasLoadedRef.current = true; return; }
+            if (skipNextSaveRef.current) { skipNextSaveRef.current = false; return; }
             if (!draggingIdRef.current) onSaveLayout(items);
           }}
           onDragStart={(layout, _old, newItem) => {
@@ -399,7 +421,8 @@ export function WidgetGrid({
             const li = localLayouts.find((l) => l.i === w.id);
             const wColors = widgetColors[w.id] ?? DEFAULT_COLORS;
             return (
-              <div key={w.id} className="overflow-visible">
+              <div key={w.id} className="overflow-visible"
+                data-grid={li ? { x: li.x, y: li.y, w: li.w, h: li.h, minW: li.minW, minH: li.minH } : undefined}>
                 <WidgetCard
                   widget={w}
                   viewMode={mode}

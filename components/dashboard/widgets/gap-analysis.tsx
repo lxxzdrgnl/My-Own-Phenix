@@ -21,9 +21,9 @@ interface GapAnalysisProps {
 }
 
 export function GapAnalysis({ data, className }: GapAnalysisProps) {
-  // Sort worst-first: largest negative gap (govScore - evalScore) first
+  // Sort worst-first: largest negative gap (evalScore - govScore) first
   const sorted = [...data].sort(
-    (a, b) => a.govScore - a.evalScore - (b.govScore - b.evalScore)
+    (a, b) => (a.evalScore - a.govScore) - (b.evalScore - b.govScore)
   );
 
   const categories = sorted.map((d) => d.system);
@@ -42,19 +42,19 @@ export function GapAnalysis({ data, className }: GapAnalysisProps) {
       max: 100,
       title: { text: "Score" },
     },
-    colors: ["#6366f1", "#10b981"],
+    colors: ["#3b82f6", "#a1a1aa"],
     series: [
       {
         type: "column",
         name: "Gov Score",
         data: govSeries,
-        color: "#6366f1",
+        color: "#3b82f6",
       },
       {
         type: "column",
         name: "Eval Score",
         data: evalSeries,
-        color: "#10b981",
+        color: "#a1a1aa",
       },
     ],
     legend: { enabled: true },
@@ -75,10 +75,10 @@ export function GapAnalysis({ data, className }: GapAnalysisProps) {
               <th className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-wide text-xs">
                 RISK
               </th>
-              <th className="px-3 py-2 text-right font-semibold text-xs uppercase tracking-wide" style={{ color: "#6366f1" }}>
+              <th className="px-3 py-2 text-right font-semibold text-xs uppercase tracking-wide" style={{ color: "#3b82f6" }}>
                 GOV SCORE
               </th>
-              <th className="px-3 py-2 text-right font-semibold text-xs uppercase tracking-wide" style={{ color: "#10b981" }}>
+              <th className="px-3 py-2 text-right font-semibold text-xs uppercase tracking-wide" style={{ color: "#a1a1aa" }}>
                 EVAL SCORE
               </th>
               <th className="px-3 py-2 text-right font-semibold text-muted-foreground uppercase tracking-wide text-xs">
@@ -94,7 +94,7 @@ export function GapAnalysis({ data, className }: GapAnalysisProps) {
           </thead>
           <tbody>
             {sorted.map((item, idx) => {
-              const gap = item.govScore - item.evalScore;
+              const gap = item.evalScore - item.govScore;
               const status: GapStatus = getGapStatus(gap);
               const badgeColor = GAP_STATUS_COLORS[status];
               const action = getRecommendedAction(status);
@@ -110,10 +110,10 @@ export function GapAnalysis({ data, className }: GapAnalysisProps) {
                   <td className="px-3 py-2 font-medium text-foreground">
                     {item.system}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: "#6366f1" }}>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: "#3b82f6" }}>
                     {item.govScore.toFixed(1)}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: "#10b981" }}>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: "#a1a1aa" }}>
                     {item.evalScore.toFixed(1)}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">

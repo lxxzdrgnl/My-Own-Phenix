@@ -24,3 +24,6 @@ npm-debug.log*
 # prisma
 prisma/dev.db
 prisma/dev.db-journal
+
+# claude
+CLAUDE.md

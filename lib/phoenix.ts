@@ -108,14 +108,13 @@ function extractResponse(output: string): string {
   return "";
 }
 
-export async function fetchTraces(
+// ─── Shared: fetch spans + annotations ─────────────────────────────────────
+
+async function fetchSpansAndAnnotations(
   projectName: string,
-  spanKinds?: string,
-  contentFilter?: string,
   startTime?: string,
   endTime?: string,
-): Promise<Trace[]> {
-  // 1. Get all spans
+): Promise<{ allSpans: any[]; annMap: Record<string, Annotation[]> }> {
   let spansUrl = `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/spans&limit=1000`;
   if (startTime) spansUrl += `&start_time=${encodeURIComponent(startTime)}`;
   if (endTime) spansUrl += `&end_time=${encodeURIComponent(endTime)}`;
@@ -124,46 +123,17 @@ export async function fetchTraces(
   const spansData = await spansRes.json();
   const allSpans: any[] = spansData.data ?? [];
 
-  // 2. Filter by span kind(s) - comma-separated for multi-select
-  const kinds = spanKinds?.split(",").filter(Boolean) ?? [];
-  let filtered = kinds.length > 0 && !kinds.includes("ALL")
-    ? allSpans.filter((s) => kinds.includes(s.span_kind))
-    : allSpans;
-
-  // 3. Filter by content type
-  if (contentFilter === "RAG") {
-    filtered = filtered.filter((s) => {
-      const input = s.attributes?.["input.value"] ?? "";
-      return input.includes("<context>") && input.includes("<question>");
-    });
-  } else if (contentFilter === "PLAYGROUND") {
-    filtered = filtered.filter((s) =>
-      (s.attributes?.["metadata.source"] ?? "") === "playground"
-    );
-  }
-
-  // 3. Find root spans (parent_id null) and build traceId -> rootSpanId map
-  const rootMap: Record<string, string> = {};
-  for (const s of allSpans) {
-    if (s.parent_id === null) {
-      rootMap[s.context.trace_id] = s.context.span_id;
-    }
-  }
-
-  // 4. Collect all span IDs we need annotations for
-  const allIds = new Set<string>();
-  for (const s of filtered) {
-    allIds.add(s.context.span_id);
-    const rid = rootMap[s.context.trace_id];
-    if (rid) allIds.add(rid);
-  }
-
-  // 5. Fetch annotations per span in parallel
+  // Fetch annotations in batches of 50
+  const allIds = allSpans.map((s) => s.context?.span_id).filter(Boolean) as string[];
   const annMap: Record<string, Annotation[]> = {};
+  const chunks: string[][] = [];
+  for (let i = 0; i < allIds.length; i += 50) chunks.push(allIds.slice(i, i + 50));
+
   await Promise.all(
-    [...allIds].map((sid) =>
-      fetch(
-        `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/span_annotations&span_ids=${sid}`,
+    chunks.map((ids) => {
+      const params = ids.map((id) => `span_ids=${id}`).join("&");
+      return fetch(
+        `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/span_annotations&${params}&limit=1000`,
       )
         .then((r) => r.json())
         .then((data) => {
@@ -176,18 +146,82 @@ export async function fetchTraces(
             });
           }
         })
-        .catch(() => {}),
-    ),
+        .catch(() => {});
+    }),
   );
 
-  // 6. Build traces
+  return { allSpans, annMap };
+}
+
+/** Merge all annotations from a trace's spans into one list (deduped by name) */
+function mergeTraceAnnotations(traceId: string, allSpans: any[], annMap: Record<string, Annotation[]>): Annotation[] {
+  const traceSpanIds = allSpans
+    .filter((s) => s.context?.trace_id === traceId)
+    .sort((a, b) => (a.parent_id === null ? -1 : 1)) // root first
+    .map((s) => s.context.span_id as string);
+
+  const merged: Annotation[] = [];
+  const seen = new Set<string>();
+  for (const sid of traceSpanIds) {
+    for (const ann of annMap[sid] ?? []) {
+      if (!seen.has(ann.name)) {
+        merged.push(ann);
+        seen.add(ann.name);
+      }
+    }
+  }
+  return merged;
+}
+
+// ─── fetchTraces (flat list for stats/filters) ─────────────────────────────
+
+export async function fetchTraces(
+  projectName: string,
+  spanKinds?: string,
+  contentFilter?: string,
+  startTime?: string,
+  endTime?: string,
+): Promise<Trace[]> {
+  const { allSpans, annMap } = await fetchSpansAndAnnotations(projectName, startTime, endTime);
+
+  // Default: only root spans (no parent). With explicit spanKinds, filter all spans.
+  const kinds = spanKinds?.split(",").filter(Boolean) ?? [];
+  let filtered = kinds.length > 0 && !kinds.includes("ALL")
+    ? allSpans.filter((s) => kinds.includes(s.span_kind))
+    : allSpans.filter((s) => s.parent_id === null);
+
+  // Filter by content type
+  if (contentFilter === "RAG") {
+    filtered = filtered.filter((s) => {
+      const input = s.attributes?.["input.value"] ?? "";
+      return input.includes("<context>") && input.includes("<question>");
+    });
+  } else if (contentFilter === "PLAYGROUND") {
+    filtered = filtered.filter((s) =>
+      (s.attributes?.["metadata.source"] ?? "") === "playground"
+    );
+  }
+
+  // Build root span lookup
+  const rootByTrace: Record<string, any> = {};
+  for (const s of allSpans) {
+    if (s.parent_id === null) rootByTrace[s.context.trace_id] = s;
+  }
+
+  // Deduplicate by trace — if multiple spans from same trace, use root
+  const seenTraces = new Set<string>();
   const results: Trace[] = [];
 
   for (const s of filtered) {
-    const sid = s.context.span_id;
-    const rid = rootMap[s.context.trace_id];
-    const input = s.attributes?.["input.value"] ?? "";
-    const output = s.attributes?.["output.value"] ?? "";
+    const traceId = s.context.trace_id;
+    if (seenTraces.has(traceId)) continue;
+    seenTraces.add(traceId);
+
+    // Use root span for query/response extraction when available
+    const root = rootByTrace[traceId] ?? s;
+    const sid = root.context.span_id;
+    const input = root.attributes?.["input.value"] ?? "";
+    const output = root.attributes?.["output.value"] ?? "";
     const isRAG = input.includes("<context>") && input.includes("<question>");
 
     let query: string;
@@ -199,49 +233,263 @@ export async function fetchTraces(
       context = extractTag(input, "context");
       response = extractResponse(output);
     } else {
-      try {
-        const msgs = JSON.parse(input);
-        const userMsg = Array.isArray(msgs)
-          ? msgs.find((m: any) => m.role === "user")?.content ?? ""
-          : "";
-        query = userMsg || s.attributes?.["metadata.prompt_label"] || s.name || "(unknown)";
-      } catch {
-        query = s.attributes?.["metadata.prompt_label"] || s.name || "(unknown)";
+      // ── Extract query ──
+      query = "";
+
+      // 1. Plain text "Query: ..." format (dexter-style)
+      const queryLineMatch = input.match(/^Query:\s*(.+)/m);
+      if (queryLineMatch) {
+        query = queryLineMatch[1].trim();
       }
+
+      // 2. JSON formats
+      if (!query) {
+        try {
+          const parsed = JSON.parse(input);
+          // { messages: [{ type: "human", content }] } (LangGraph)
+          if (Array.isArray(parsed?.messages)) {
+            for (const msg of parsed.messages) {
+              if ((msg?.type === "human" || msg?.role === "user") && msg?.content) {
+                query = String(msg.content);
+                break;
+              }
+              if (Array.isArray(msg)) {
+                for (const m of msg) {
+                  if (m?.id?.includes?.("HumanMessage") || m?.type === "human") {
+                    query = m?.kwargs?.content || m?.content || "";
+                    break;
+                  }
+                }
+                if (query) break;
+              }
+            }
+          }
+          // [{ role: "user", content }] (OpenAI)
+          if (!query && Array.isArray(parsed)) {
+            const userMsg = parsed.find((m: any) => m.role === "user" || m.type === "human");
+            if (userMsg?.content) query = String(userMsg.content);
+          }
+          // { input: "..." } or { query: "..." }
+          if (!query && parsed?.input) query = String(parsed.input);
+          if (!query && parsed?.query) query = String(parsed.query);
+        } catch {}
+      }
+
+      if (!query) query = root.attributes?.["metadata.prompt_label"] || root.name || "(unknown)";
+
+      // ── Extract context ──
+      // 1. From plain text "Data retrieved from tool calls:" section
       context = "";
-      response = typeof output === "string" && !output.startsWith("{") ? output : (() => {
-        try { return JSON.parse(output)?.generations?.[0]?.[0]?.text ?? output; } catch { return output; }
-      })();
+      const toolDataMarker = "Data retrieved from tool calls:";
+      const toolIdx = input.indexOf(toolDataMarker);
+      if (toolIdx >= 0) {
+        let raw = input.slice(toolIdx + toolDataMarker.length).trim();
+        // Cut off metadata sections
+        const metaCut = raw.indexOf("## Tool Usage");
+        if (metaCut >= 0) raw = raw.slice(0, metaCut).trim();
+        context = raw;
+      }
+
+      // 2. From sibling TOOL/RETRIEVER spans
+      if (!context) {
+        const traceSpans = allSpans.filter((ts) => ts.context?.trace_id === traceId);
+        const contextParts: string[] = [];
+        for (const ts of traceSpans) {
+          const kind = String(ts.attributes?.["openinference.span.kind"] ?? ts.span_kind ?? "").toUpperCase();
+          if ((kind === "TOOL" || kind === "RETRIEVER") && ts.attributes?.["output.value"]) {
+            const out = String(ts.attributes["output.value"]);
+            if (out && out.length > 10) contextParts.push(out.slice(0, 2000));
+          }
+        }
+        context = contextParts.join("\n---\n");
+      }
+
+      // ── Extract response ──
+      response = "";
+      try {
+        const parsed = JSON.parse(output);
+        // LangGraph output: { messages: [{ type: "ai", content: "..." }], docs: [...] }
+        if (Array.isArray(parsed?.messages)) {
+          const aiMsg = parsed.messages.find((m: any) => m.type === "ai" || m.role === "assistant");
+          if (aiMsg?.content) response = String(aiMsg.content);
+          // Also extract context from docs if available and context is empty
+          if (!context && Array.isArray(parsed.docs)) {
+            context = parsed.docs.map((d: any) => d.page_content ?? "").filter(Boolean).join("\n---\n");
+          }
+          // Also extract query from search_query
+          if ((!query || query === root.name) && parsed.search_query) {
+            query = String(parsed.search_query);
+          }
+        }
+        // LangChain AIMessage: { kwargs: { content: "..." } }
+        if (!response) {
+          response = parsed?.kwargs?.content
+            || parsed?.generations?.[0]?.[0]?.text
+            || parsed?.output
+            || parsed?.content
+            || "";
+        }
+      } catch {}
+      if (!response && output && !output.startsWith("{")) response = output;
+      if (!response) response = output;
     }
 
     if (!query && !response) continue;
 
-    const spanAnns = annMap[sid] ?? [];
-    const rootAnns = rid ? (annMap[rid] ?? []) : [];
-    const spanNames = new Set(spanAnns.map((a) => a.name));
-    const merged = [...spanAnns, ...rootAnns.filter((a) => !spanNames.has(a.name))];
-
     results.push({
       spanId: sid,
-      traceId: s.context.trace_id,
-      time: s.start_time,
-      latency: s.end_time
-        ? new Date(s.end_time).getTime() - new Date(s.start_time).getTime()
+      traceId,
+      time: root.start_time,
+      latency: root.end_time
+        ? new Date(root.end_time).getTime() - new Date(root.start_time).getTime()
         : 0,
       query,
       context,
       response,
-      annotations: merged,
-      promptTokens: Number(s.attributes?.["llm.token_count.prompt"] ?? 0),
-      completionTokens: Number(s.attributes?.["llm.token_count.completion"] ?? 0),
-      totalTokens: Number(s.attributes?.["llm.token_count.total"] ?? 0),
-      model: String(s.attributes?.["llm.model_name"] ?? ""),
-      status: String(s.status_code ?? "OK"),
-      spanKind: String(s.span_kind ?? ""),
+      annotations: mergeTraceAnnotations(traceId, allSpans, annMap),
+      promptTokens: Number(root.attributes?.["llm.token_count.prompt"] ?? 0),
+      completionTokens: Number(root.attributes?.["llm.token_count.completion"] ?? 0),
+      totalTokens: Number(root.attributes?.["llm.token_count.total"] ?? 0),
+      model: String(root.attributes?.["llm.model_name"] ?? ""),
+      status: String(root.status_code ?? "OK"),
+      spanKind: String(root.span_kind ?? ""),
     });
   }
 
   return results;
+}
+
+// ─── Raw Span Tree (for SpanTreeView) ───────────────────────────────────────
+
+export interface RawSpan {
+  spanId: string;
+  traceId: string;
+  parentId: string | null;
+  name: string;
+  spanKind: string;
+  status: string;
+  latency: number;
+  input: string;
+  output: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cost: number;
+  annotations: Annotation[];
+  children: RawSpan[];
+}
+
+export interface TraceTree {
+  traceId: string;
+  rootSpan: RawSpan;
+  spanCount: number;
+  latency: number;
+  time: string;
+}
+
+function buildSpanTree(rawSpans: any[], annMap: Record<string, Annotation[]>): RawSpan[] {
+  const spanMap = new Map<string, RawSpan>();
+  const roots: RawSpan[] = [];
+
+  // Create RawSpan objects
+  for (const s of rawSpans) {
+    const sid = s.context?.span_id ?? "";
+    const attrs = s.attributes ?? {};
+    const promptTokens = Number(attrs["llm.token_count.prompt"] ?? 0);
+    const completionTokens = Number(attrs["llm.token_count.completion"] ?? 0);
+    const totalTokens = Number(attrs["llm.token_count.total"] ?? 0);
+
+    const span: RawSpan = {
+      spanId: sid,
+      traceId: s.context?.trace_id ?? "",
+      parentId: s.parent_id ?? null,
+      name: s.name ?? "",
+      spanKind: String(attrs["openinference.span.kind"] ?? s.span_kind ?? ""),
+      status: String(s.status_code ?? "OK"),
+      latency: s.end_time && s.start_time
+        ? new Date(s.end_time).getTime() - new Date(s.start_time).getTime()
+        : 0,
+      input: String(attrs["input.value"] ?? ""),
+      output: String(attrs["output.value"] ?? ""),
+      model: String(attrs["llm.model_name"] ?? ""),
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      cost: 0,
+      annotations: annMap[sid] ?? [],
+      children: [],
+    };
+    spanMap.set(sid, span);
+  }
+
+  // Build tree
+  for (const span of spanMap.values()) {
+    if (span.parentId && spanMap.has(span.parentId)) {
+      spanMap.get(span.parentId)!.children.push(span);
+    } else {
+      roots.push(span);
+    }
+  }
+
+  // Merge all descendant annotations into root spans
+  for (const root of roots) {
+    const existing = new Set(root.annotations.map((a) => a.name));
+    function collectAnnotations(node: RawSpan) {
+      for (const ann of node.annotations) {
+        if (!existing.has(ann.name)) {
+          root.annotations.push(ann);
+          existing.add(ann.name);
+        }
+      }
+      for (const child of node.children) collectAnnotations(child);
+    }
+    for (const child of root.children) collectAnnotations(child);
+  }
+
+  return roots;
+}
+
+export async function fetchTraceTrees(
+  projectName: string,
+  startTime?: string,
+  endTime?: string,
+): Promise<TraceTree[]> {
+  const { allSpans, annMap } = await fetchSpansAndAnnotations(projectName, startTime, endTime);
+
+  // Group by trace
+  const traceGroups: Record<string, any[]> = {};
+  for (const s of allSpans) {
+    const tid = s.context?.trace_id;
+    if (tid) {
+      if (!traceGroups[tid]) traceGroups[tid] = [];
+      traceGroups[tid].push(s);
+    }
+  }
+
+  // Build trees
+  const trees: TraceTree[] = [];
+  for (const [traceId, spans] of Object.entries(traceGroups)) {
+    const roots = buildSpanTree(spans, annMap);
+    if (roots.length === 0) continue;
+
+    // Find the actual root (no parent)
+    const root = roots.find((r) => r.parentId === null) ?? roots[0];
+    const rootStart = spans.find((s) => s.parent_id === null)?.start_time;
+
+    trees.push({
+      traceId,
+      rootSpan: root,
+      spanCount: spans.length,
+      latency: root.latency,
+      time: rootStart ?? spans[0]?.start_time ?? "",
+    });
+  }
+
+  // Sort by time descending
+  trees.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+  return trees;
 }
 
 export async function fetchPrompts(): Promise<PromptInfo[]> {

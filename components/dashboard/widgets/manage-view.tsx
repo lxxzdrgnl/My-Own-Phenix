@@ -5,7 +5,9 @@ import { StatCard } from "@/components/dashboard/widgets/stat-card";
 import { HighchartWidget } from "@/components/dashboard/widgets/highchart-widget";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
-import { ShieldAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ShieldAlert, Plus, X } from "lucide-react";
 
 interface RiskItem {
   id: string;
@@ -115,6 +117,8 @@ export function ManageView({ projectId, className }: ManageViewProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newRisk, setNewRisk] = useState({ name: "", system: "", riskLevel: "MEDIUM", mitigation: "", assignee: "" });
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -140,6 +144,31 @@ export function ManageView({ projectId, className }: ManageViewProps) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  async function handleAddRisk() {
+    if (!newRisk.name.trim()) return;
+    try {
+      await fetch("/api/risks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newRisk, projectId, status: "OPEN" }),
+      });
+      setNewRisk({ name: "", system: "", riskLevel: "MEDIUM", mitigation: "", assignee: "" });
+      setShowAddForm(false);
+      loadData();
+    } catch {}
+  }
+
+  async function handleUpdateStatus(riskId: string, status: string) {
+    try {
+      await fetch("/api/risks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: riskId, status, resolvedAt: status === "MITIGATED" ? new Date().toISOString() : null }),
+      });
+      loadData();
+    } catch {}
+  }
 
   // ── Computed stats ──
   const total = risks.length;
@@ -183,6 +212,49 @@ export function ManageView({ projectId, className }: ManageViewProps) {
 
   return (
     <div className={cn("space-y-6", className)}>
+      {/* Add Risk button + form */}
+      <div>
+        {!showAddForm ? (
+          <Button size="sm" variant="outline" onClick={() => setShowAddForm(true)} className="gap-1.5 text-xs">
+            <Plus className="size-3" /> Add Risk
+          </Button>
+        ) : (
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">New Risk</h3>
+              <button onClick={() => setShowAddForm(false)}><X className="size-4 text-muted-foreground" /></button>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Name</label>
+                <Input value={newRisk.name} onChange={(e) => setNewRisk({ ...newRisk, name: e.target.value })} placeholder="e.g. Hallucination in legal advice" className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">System</label>
+                <Input value={newRisk.system} onChange={(e) => setNewRisk({ ...newRisk, system: e.target.value })} placeholder="e.g. RAG Pipeline" className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Severity</label>
+                <select value={newRisk.riskLevel} onChange={(e) => setNewRisk({ ...newRisk, riskLevel: e.target.value })} className="h-8 w-full rounded-md border bg-background px-2 text-xs">
+                  {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Mitigation</label>
+                <Input value={newRisk.mitigation} onChange={(e) => setNewRisk({ ...newRisk, mitigation: e.target.value })} placeholder="e.g. Add citation eval + guardrail" className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Assignee</label>
+                <Input value={newRisk.assignee} onChange={(e) => setNewRisk({ ...newRisk, assignee: e.target.value })} placeholder="e.g. Team Lead" className="h-8 text-xs" />
+              </div>
+            </div>
+            <Button size="sm" onClick={handleAddRisk} disabled={!newRisk.name.trim()} className="text-xs">Create Risk</Button>
+          </div>
+        )}
+      </div>
+
       {/* Top row: 5 stat cards */}
       <div className="grid grid-cols-5 gap-3">
         {[
@@ -242,7 +314,7 @@ export function ManageView({ projectId, className }: ManageViewProps) {
               <table className="w-full text-xs">
                 <thead className="bg-muted/30 sticky top-0">
                   <tr>
-                    {["Risk", "System", "Severity", "Mitigation", "Status", "Assignee"].map(
+                    {["Risk", "System", "Severity", "Mitigation", "Status", "Assignee", "Action"].map(
                       (h) => (
                         <th
                           key={h}
@@ -280,6 +352,15 @@ export function ManageView({ projectId, className }: ManageViewProps) {
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {r.assignee ?? "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <select
+                          value={r.status}
+                          onChange={(e) => handleUpdateStatus(r.id, e.target.value)}
+                          className="rounded border bg-background px-1.5 py-0.5 text-[10px]"
+                        >
+                          {STATUS_LABELS.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
                       </td>
                     </tr>
                   ))}

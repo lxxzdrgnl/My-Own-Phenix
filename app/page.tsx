@@ -9,19 +9,16 @@ import { fetchProjects } from "@/lib/phoenix";
 const LS_KEY = "last_chat_project";
 
 export default function Home() {
-  const [project, setProject] = useState(() => {
-    if (typeof window === "undefined") return "default";
-    return localStorage.getItem(LS_KEY) || "default";
-  });
+  const [project, setProject] = useState<string | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
-  const loadProjects = useCallback(() => {
+  useEffect(() => {
+    const saved = localStorage.getItem(LS_KEY);
+    setProject(saved || "default");
     fetchProjects()
       .then((p) => setProjects(p.filter((x) => x.name !== "playground")))
       .catch(() => {});
   }, []);
-
-  useEffect(() => { loadProjects(); }, [loadProjects]);
 
   const handleProjectChange = (name: string) => {
     setProject(name);
@@ -36,11 +33,13 @@ export default function Home() {
         body: JSON.stringify({ name, description: "" }),
       });
       if (res.ok) {
-        loadProjects();
+        fetchProjects().then((p) => setProjects(p.filter((x) => x.name !== "playground"))).catch(() => {});
         handleProjectChange(name);
       }
     } catch {}
   };
+
+  if (!project) return null;
 
   return (
     <Assistant

@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { fetchProjects, fetchTraces, Project, Trace } from "@/lib/phoenix";
+import { fetchProjects, fetchTraces, fetchTraceTrees, Project, Trace, type TraceTree } from "@/lib/phoenix";
+import { SpanTreeView } from "@/components/span-tree-view";
 import { StatCard } from "@/components/dashboard/widgets/stat-card";
 import { HighchartWidget } from "@/components/dashboard/widgets/highchart-widget";
 import { MeasureGrid } from "@/components/dashboard/widgets/measure-grid";
 import { RmfFunctionCards } from "@/components/dashboard/widgets/rmf-function-card";
 import { GapAnalysis, type GapDataItem } from "@/components/dashboard/widgets/gap-analysis";
 import { ManageView } from "@/components/dashboard/widgets/manage-view";
-import { computeMetrics, type FeedbackStats } from "@/lib/rmf-utils";
+import { computeMetrics, computeGovernScore, computeMapScore, computeMeasureScore, computeManageScore, type FeedbackStats, type RmfScores } from "@/lib/rmf-utils";
 import type { AnnotationData, SpanData } from "@/lib/dashboard-utils";
-import { AnnotationBadges } from "@/components/annotation-badge";
 import { cn } from "@/lib/utils";
 import {
   Plus,
@@ -29,22 +29,12 @@ import { Input } from "@/components/ui/input";
 import { LoadingState, EmptyState } from "@/components/ui/empty-state";
 import { DateRangePicker, getPresetRange, type DateRange } from "@/components/ui/date-range-picker";
 
-type ProjectTab = "traces" | "measure" | "risk";
 
 function formatMs(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString("ko-KR", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
 
 function buildLatencyChartOptions(traces: Trace[]): Highcharts.Options {
   const sorted = [...traces].sort(
@@ -55,7 +45,7 @@ function buildLatencyChartOptions(traces: Trace[]): Highcharts.Options {
     title: { text: "Latency Over Time", style: { fontSize: "14px" } },
     xAxis: {
       categories: sorted.map((t) =>
-        new Date(t.time).toLocaleString("ko-KR", {
+        new Date(t.time).toLocaleString("en-US", {
           month: "short",
           day: "numeric",
           hour: "2-digit",
@@ -91,52 +81,29 @@ function buildScoreChartOptions(traces: Trace[]): Highcharts.Options {
   };
 }
 
-function TraceRow({ trace }: { trace: Trace }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border rounded-lg overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-muted/30 transition-colors"
-      >
-        {open ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{trace.query}</p>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            {formatTime(trace.time)} &middot; {formatMs(trace.latency)}
-            {trace.annotations.length > 0 && (
-              <>
-                {" "}&middot;{" "}
-                <AnnotationBadges annotations={trace.annotations} />
-              </>
-            )}
-          </div>
-        </div>
-      </button>
-      {open && (
-        <div className="border-t px-4 py-3 space-y-3 bg-muted/10">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-1">Query</p>
-            <p className="text-sm whitespace-pre-wrap">{trace.query}</p>
-          </div>
-          {trace.context && (
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground mb-1">Context</p>
-              <p className="text-sm whitespace-pre-wrap max-h-40 overflow-y-auto">{trace.context}</p>
-            </div>
-          )}
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-1">Response</p>
-            <p className="text-sm whitespace-pre-wrap max-h-60 overflow-y-auto">{trace.response}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+
+function buildPassFailChartOptions(traces: Trace[]): Highcharts.Options {
+  const FAIL_LABELS = new Set(["hallucinated", "incorrect", "detected", "irrelevant", "unfaithful", "fail", "false"]);
+  const byName: Record<string, { pass: number; fail: number }> = {};
+  for (const t of traces) {
+    for (const a of t.annotations) {
+      if (!byName[a.name]) byName[a.name] = { pass: 0, fail: 0 };
+      if (FAIL_LABELS.has(a.label)) byName[a.name].fail++;
+      else byName[a.name].pass++;
+    }
+  }
+  const categories = Object.keys(byName);
+  return {
+    chart: { type: "bar" },
+    title: { text: "Pass / Fail by Eval", style: { fontSize: "14px" } },
+    xAxis: { categories },
+    yAxis: { title: { text: "Count" } },
+    plotOptions: { bar: { stacking: "normal" } },
+    series: [
+      { name: "Pass", type: "bar", data: categories.map((n) => byName[n].pass), color: "#d4d4d4" },
+      { name: "Fail", type: "bar", data: categories.map((n) => byName[n].fail), color: "#171717" },
+    ],
+  };
 }
 
 export function ProjectsManager() {
@@ -144,15 +111,20 @@ export function ProjectsManager() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [selectedProject, setSelectedProjectState] = useState<string | null>(null);
+  const setSelectedProject = (name: string | null) => {
+    setSelectedProjectState(name);
+    if (name) localStorage.setItem("last_projects_project", name);
+  };
   const [traces, setTraces] = useState<Trace[]>([]);
+  const [traceTrees, setTraceTrees] = useState<TraceTree[]>([]);
   const [tracesLoading, setTracesLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [annotationFilter, setAnnotationFilter] = useState<"all" | "pass" | "fail" | "none">("all");
   const [latencyFilter, setLatencyFilter] = useState<"all" | "fast" | "medium" | "slow">("all");
+  const [activeTab, setActiveTab] = useState<"traces" | "measure" | "risk">("traces");
   const [filterOpen, setFilterOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>(() => getPresetRange(7));
-  const [activeTab, setActiveTab] = useState<ProjectTab>("traces");
 
   function saveOrder(ps: Project[]) {
     localStorage.setItem("project_order", JSON.stringify(ps.map((p) => p.name)));
@@ -179,9 +151,11 @@ export function ProjectsManager() {
     try {
       const ps = await fetchProjects();
       setProjects(ps);
-      // Auto-select first project if none selected
+      // Auto-select saved or first project
       if (ps.length > 0 && !selectedProject) {
-        setSelectedProject(ps[0].name);
+        const saved = localStorage.getItem("last_projects_project");
+        const initial = saved && ps.some((p) => p.name === saved) ? saved : ps[0].name;
+        setSelectedProjectState(initial);
       }
     } catch (e) {
       console.error(e);
@@ -193,15 +167,13 @@ export function ProjectsManager() {
     if (!selectedProject) return;
     setTracesLoading(true);
     try {
-      const t = await fetchTraces(
-        selectedProject,
-        undefined,
-        undefined,
-        dateRange.from?.toISOString(),
-        dateRange.to?.toISOString(),
-      );
+      const [t, trees] = await Promise.all([
+        fetchTraces(selectedProject, undefined, undefined, dateRange.from?.toISOString(), dateRange.to?.toISOString()),
+        fetchTraceTrees(selectedProject, dateRange.from?.toISOString(), dateRange.to?.toISOString()),
+      ]);
       t.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
       setTraces(t);
+      setTraceTrees(trees);
     } catch (e) {
       console.error(e);
     }
@@ -277,14 +249,21 @@ export function ProjectsManager() {
 
   const hasActiveFilters = searchQuery !== "" || annotationFilter !== "all" || latencyFilter !== "all";
 
-  // Metrics computation (based on all traces, not filtered)
-  const latencies = traces.map((t) => t.latency).filter((l) => l > 0);
+  // Metrics computation (based on traceTrees for accurate root-level data)
+  const traceCount = traceTrees.length || traces.length;
+  const latencies = (traceTrees.length > 0
+    ? traceTrees.map((t) => t.latency)
+    : traces.map((t) => t.latency)
+  ).filter((l) => l > 0);
   const avgLatency = latencies.length
     ? latencies.reduce((a, b) => a + b, 0) / latencies.length
     : 0;
-  const scores = traces.flatMap((t) => t.annotations).map((a) => a.score).filter((s) => s > 0);
+  const allAnnotations = traceTrees.length > 0
+    ? traceTrees.flatMap((t) => t.rootSpan.annotations)
+    : traces.flatMap((t) => t.annotations);
+  const scores = allAnnotations.map((a) => a.score).filter((s) => s > 0);
   const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-  const hasAnnotations = scores.length > 0;
+  const hasAnnotations = allAnnotations.length > 0;
 
   // Feedback stats for frustration metric
   const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | undefined>();
@@ -300,31 +279,104 @@ export function ProjectsManager() {
   }, [selectedProject]);
   useEffect(() => { loadFeedbackStats(); }, [loadFeedbackStats]);
 
-  // RMF / MEASURE tab metrics
+  // RMF / MEASURE tab metrics — use traceTrees for accurate token/cost data
   const rmfMetrics = useMemo(() => {
-    if (!traces.length) return computeMetrics([], [], feedbackStats);
-    const annData: AnnotationData[] = traces.flatMap((t) =>
-      (t.annotations || []).map((a) => ({ ...a, time: t.time }))
-    );
-    const spanData: SpanData[] = traces.map((t) => ({
-      latency: t.latency,
-      status: t.status || "OK",
-      time: t.time,
-      promptTokens: t.promptTokens || 0,
-      completionTokens: t.completionTokens || 0,
-      totalTokens: t.totalTokens || 0,
-      model: t.model || "",
-      spanKind: t.spanKind || "LLM",
-    }));
+    if (!traceTrees.length && !traces.length) return computeMetrics([], [], feedbackStats);
+
+    // Collect all spans from tree (including children) for token/cost metrics
+    function collectSpans(node: import("@/lib/phoenix").RawSpan): SpanData[] {
+      const result: SpanData[] = [{
+        latency: node.latency,
+        status: node.status || "OK",
+        time: "",
+        promptTokens: node.promptTokens || 0,
+        completionTokens: node.completionTokens || 0,
+        totalTokens: node.totalTokens || 0,
+        model: node.model || "",
+        spanKind: node.spanKind || "",
+      }];
+      for (const child of node.children) result.push(...collectSpans(child));
+      return result;
+    }
+
+    const spanData: SpanData[] = traceTrees.length > 0
+      ? traceTrees.flatMap((t) => {
+          const spans = collectSpans(t.rootSpan);
+          spans[0].time = t.time; // root gets the time
+          return spans;
+        })
+      : traces.map((t) => ({
+          latency: t.latency, status: t.status || "OK", time: t.time,
+          promptTokens: t.promptTokens || 0, completionTokens: t.completionTokens || 0,
+          totalTokens: t.totalTokens || 0, model: t.model || "", spanKind: t.spanKind || "LLM",
+        }));
+
+    const annData: AnnotationData[] = traceTrees.length > 0
+      ? traceTrees.flatMap((t) => t.rootSpan.annotations.map((a) => ({ ...a, time: t.time })))
+      : traces.flatMap((t) => (t.annotations || []).map((a) => ({ ...a, time: t.time })));
+
     return computeMetrics(spanData, annData, feedbackStats);
-  }, [traces, feedbackStats]);
+  }, [traceTrees, traces, feedbackStats]);
 
-  const measureScore = useMemo(() => {
-    const greenCount = rmfMetrics.filter((m) => m.status === "green").length;
-    return rmfMetrics.length > 0 ? Math.round((greenCount / rmfMetrics.length) * 100) : 0;
+  // RMF function scores
+  const [riskStats, setRiskStats] = useState({ total: 0, mitigated: 0, openIncidents: 0 });
+  const loadRiskStats = useCallback(async () => {
+    if (!selectedProject) return;
+    try {
+      const [risksRes, incidentsRes] = await Promise.all([
+        fetch(`/api/risks?projectId=${encodeURIComponent(selectedProject)}`).then((r) => r.json()).catch(() => ({ risks: [] })),
+        fetch(`/api/incidents?projectId=${encodeURIComponent(selectedProject)}`).then((r) => r.json()).catch(() => ({ incidents: [] })),
+      ]);
+      const risks = risksRes.risks ?? [];
+      const incidents = incidentsRes.incidents ?? [];
+      setRiskStats({
+        total: risks.length,
+        mitigated: risks.filter((r: any) => r.status === "MITIGATED").length,
+        openIncidents: incidents.filter((i: any) => i.status !== "RESOLVED").length,
+      });
+    } catch {}
+  }, [selectedProject]);
+  useEffect(() => { loadRiskStats(); }, [loadRiskStats]);
+
+  const rmfScores: RmfScores = useMemo(() => {
+    // Count enabled evals for GOVERN
+    const builtInCount = 6;
+    const customEvalCount = traceTrees.length > 0
+      ? new Set(traceTrees.flatMap((t) => t.rootSpan.annotations.map((a) => a.name))).size - builtInCount
+      : 0;
+    const enabledEvalCount = new Set(
+      traceTrees.flatMap((t) => t.rootSpan.annotations.map((a) => a.name))
+    ).size;
+
+    return {
+      govern: computeGovernScore(enabledEvalCount, builtInCount + Math.max(0, customEvalCount), customEvalCount > 0),
+      map: computeMapScore(rmfMetrics),
+      measure: computeMeasureScore(rmfMetrics),
+      manage: computeManageScore(riskStats.total, riskStats.mitigated, riskStats.openIncidents),
+    };
+  }, [rmfMetrics, traceTrees, riskStats]);
+
+  const gapData: GapDataItem[] = useMemo(() => {
+    if (!rmfMetrics.length) return [];
+    // Group metrics into risk categories and compute eval scores
+    const categories: { system: string; metricIds: string[]; govScore: number }[] = [
+      { system: "Factual Accuracy", metricIds: ["factual_rate"], govScore: 95 },
+      { system: "QA Accuracy", metricIds: ["qa_accuracy"], govScore: 90 },
+      { system: "Retrieval Relevance", metricIds: ["retrieval_relevance"], govScore: 20 },
+      { system: "Safety", metricIds: ["safety_rate", "guardrail_pass"], govScore: 97 },
+      { system: "Citation Accuracy", metricIds: ["citation_accuracy"], govScore: 85 },
+      { system: "Performance", metricIds: ["latency_score", "success_rate"], govScore: 95 },
+      { system: "Cost Efficiency", metricIds: ["token_score", "cost_score"], govScore: 80 },
+      { system: "Tool Calling", metricIds: ["tool_calling_accuracy"], govScore: 60 },
+    ];
+    return categories.map((cat) => {
+      const metrics = cat.metricIds.map((id) => rmfMetrics.find((m) => m.id === id)).filter(Boolean);
+      const evalScore = metrics.length > 0
+        ? Math.round(metrics.reduce((sum, m) => sum + m!.value, 0) / metrics.length)
+        : 0;
+      return { system: cat.system, govScore: cat.govScore, evalScore };
+    });
   }, [rmfMetrics]);
-
-  const gapData: GapDataItem[] = [];
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
@@ -420,14 +472,16 @@ export function ProjectsManager() {
           ) : (
             <div className="p-6">
               <div className="mx-auto max-w-5xl">
-                {/* Header */}
-                <div className="mb-6">
-                  <h1 className="text-2xl font-bold">{selectedProject}</h1>
-                  <p className="text-sm text-muted-foreground">Project overview</p>
-                </div>
-
-                {/* Tab bar */}
-                <div className="flex gap-1 border-b mb-4">
+                {/* Header + Tab bar + Date picker */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h1 className="text-2xl font-bold">{selectedProject}</h1>
+                      <p className="text-sm text-muted-foreground">Project overview</p>
+                    </div>
+                    <DateRangePicker value={dateRange} onChange={setDateRange} />
+                  </div>
+                  <div className="flex gap-1 border-b">
                   {(["traces", "measure", "risk"] as const).map((tab) => (
                     <button
                       key={tab}
@@ -435,23 +489,24 @@ export function ProjectsManager() {
                       className={cn(
                         "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
                         activeTab === tab
-                          ? "border-primary text-foreground"
+                          ? "border-foreground text-foreground"
                           : "border-transparent text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      {{ traces: "트레이스", measure: "MEASURE 지표", risk: "리스크 관리" }[tab]}
+                      {{ traces: "Traces", measure: "Measure", risk: "Risk Management" }[tab]}
                     </button>
                   ))}
+                  </div>
                 </div>
 
                 {/* Traces tab */}
                 {activeTab === "traces" && (
-                  <>
+                <>
                     {/* Stat Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                       <div className="rounded-xl border bg-card h-28">
                         <StatCard
-                          value={traces.length.toLocaleString()}
+                          value={traceCount.toLocaleString()}
                           label="Total Traces"
                           trend={latencies.length > 0 ? `${latencies.length} with latency` : undefined}
                         />
@@ -472,21 +527,39 @@ export function ProjectsManager() {
                       </div>
                       <div className="rounded-xl border bg-card h-28">
                         <StatCard
-                          value={traces.filter((t) => t.response).length.toLocaleString()}
-                          label="Responses"
+                          value={(() => {
+                            const FAIL_LABELS = ["hallucinated", "incorrect", "detected", "irrelevant", "unfaithful", "fail", "false"];
+                            const withAnns = traceTrees.filter((t) => t.rootSpan.annotations.length > 0);
+                            if (withAnns.length === 0) return "-";
+                            const passed = withAnns.filter((t) => !t.rootSpan.annotations.some((a) => FAIL_LABELS.includes(a.label))).length;
+                            return `${Math.round((passed / withAnns.length) * 100)}%`;
+                          })()}
+                          label="Pass Rate"
+                          trend={(() => {
+                            const FAIL_LABELS = ["hallucinated", "incorrect", "detected", "irrelevant", "unfaithful", "fail", "false"];
+                            const withAnns = traceTrees.filter((t) => t.rootSpan.annotations.length > 0);
+                            if (withAnns.length === 0) return undefined;
+                            const passed = withAnns.filter((t) => !t.rootSpan.annotations.some((a) => FAIL_LABELS.includes(a.label))).length;
+                            return `${passed} / ${withAnns.length} traces`;
+                          })()}
                         />
                       </div>
                     </div>
 
                     {/* Charts */}
                     {traces.length > 0 && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
                         <div className="rounded-xl border bg-card h-64">
                           <HighchartWidget options={buildLatencyChartOptions(traces)} />
                         </div>
                         {hasAnnotations && (
                           <div className="rounded-xl border bg-card h-64">
                             <HighchartWidget options={buildScoreChartOptions(traces)} />
+                          </div>
+                        )}
+                        {hasAnnotations && (
+                          <div className="rounded-xl border bg-card h-64">
+                            <HighchartWidget options={buildPassFailChartOptions(traces)} />
                           </div>
                         )}
                       </div>
@@ -504,8 +577,6 @@ export function ProjectsManager() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          {/* Date range */}
-                          <DateRangePicker value={dateRange} onChange={setDateRange} />
                           {/* Search */}
                           <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -597,16 +668,12 @@ export function ProjectsManager() {
                       )}
                     </div>
 
-                    {filteredTraces.length === 0 ? (
+                    {traceTrees.length === 0 ? (
                       <p className="py-12 text-center text-muted-foreground">
                         {traces.length === 0 ? "No traces found for this project" : "No traces match the current filters"}
                       </p>
                     ) : (
-                      <div className="flex flex-col gap-2">
-                        {filteredTraces.map((t) => (
-                          <TraceRow key={t.spanId} trace={t} />
-                        ))}
-                      </div>
+                      <SpanTreeView traces={traceTrees} projectName={selectedProject ?? undefined} onRefresh={loadTraces} />
                     )}
                   </>
                 )}
@@ -614,7 +681,7 @@ export function ProjectsManager() {
                 {/* MEASURE tab */}
                 {activeTab === "measure" && (
                   <div className="space-y-6">
-                    <RmfFunctionCards measureScore={measureScore} />
+                    <RmfFunctionCards scores={rmfScores} />
                     <MeasureGrid metrics={rmfMetrics} />
                     <GapAnalysis data={gapData} />
                   </div>

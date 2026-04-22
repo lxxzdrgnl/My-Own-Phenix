@@ -125,6 +125,11 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
       attachments: attachmentAdapter,
     },
     stream: async function* (messages, { command }) {
+      if (!user) {
+        yield { event: "messages/partial", data: [{ type: "ai", content: "Please sign in to use the chat." }] };
+        return;
+      }
+
       const isRest = agentConfig?.agentType === "rest";
 
       if (!threadIdRef.current) {
