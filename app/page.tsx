@@ -27,7 +27,7 @@ export default function Home() {
 
   const handleProjectAdd = async (name: string) => {
     try {
-      const res = await fetch(`/api/phoenix?path=/v1/projects`, {
+      const res = await fetch(`/api/v1/projects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, description: "" }),

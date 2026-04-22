@@ -66,7 +66,7 @@ export interface Project {
 }
 
 export async function fetchProjects(): Promise<Project[]> {
-  const res = await fetch("/api/phoenix?path=/v1/projects");
+  const res = await fetch("/api/v1/projects");
   const data = await res.json();
   const projects = (data.data ?? []).map((p: any) => ({ id: p.name, name: p.name }));
 
@@ -116,7 +116,7 @@ async function fetchSpansAndAnnotations(
   startTime?: string,
   endTime?: string,
 ): Promise<{ allSpans: any[]; annMap: Record<string, Annotation[]> }> {
-  let spansUrl = `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/spans&limit=1000`;
+  let spansUrl = `/api/v1/projects/${encodeURIComponent(projectName)}/spans?limit=1000`;
   if (startTime) spansUrl += `&start_time=${encodeURIComponent(startTime)}`;
   if (endTime) spansUrl += `&end_time=${encodeURIComponent(endTime)}`;
 
@@ -134,7 +134,7 @@ async function fetchSpansAndAnnotations(
     chunks.map((ids) => {
       const params = ids.map((id) => `span_ids=${id}`).join("&");
       return fetch(
-        `/api/phoenix?path=/v1/projects/${encodeURIComponent(projectName)}/span_annotations&${params}&limit=1000`,
+        `/api/v1/projects/${encodeURIComponent(projectName)}/span_annotations?${params}&limit=1000`,
       )
         .then((r) => r.json())
         .then((data) => {
@@ -495,7 +495,7 @@ export async function fetchTraceTrees(
 }
 
 export async function fetchPrompts(): Promise<PromptInfo[]> {
-  const res = await fetch("/api/phoenix?path=/v1/prompts");
+  const res = await fetch("/api/v1/prompts");
   const data = await res.json();
   return data.data ?? [];
 }
@@ -504,7 +504,7 @@ export async function fetchPromptVersions(
   name: string,
 ): Promise<PromptVersion[]> {
   const res = await fetch(
-    `/api/phoenix?path=/v1/prompts/${encodeURIComponent(name)}/versions`,
+    `/api/v1/prompts/${encodeURIComponent(name)}/versions`,
   );
   const data = await res.json();
   return data.data ?? [];
@@ -520,7 +520,7 @@ export async function fetchPromptVersionTags(
   versionId: string,
 ): Promise<PromptTag[]> {
   const res = await fetch(
-    `/api/phoenix?path=/v1/prompt_versions/${encodeURIComponent(versionId)}/tags`,
+    `/api/v1/prompt_versions/${encodeURIComponent(versionId)}/tags`,
   );
   const data = await res.json();
   return data.data ?? [];
@@ -531,7 +531,7 @@ export async function addPromptVersionTag(
   tagName: string,
 ): Promise<void> {
   const res = await fetch(
-    `/api/phoenix?path=/v1/prompt_versions/${encodeURIComponent(versionId)}/tags`,
+    `/api/v1/prompt_versions/${encodeURIComponent(versionId)}/tags`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -549,7 +549,7 @@ export async function deletePromptVersionTag(
   tagName: string,
 ): Promise<void> {
   const res = await fetch(
-    `/api/phoenix?path=/v1/prompt_versions/${encodeURIComponent(versionId)}/tags/${encodeURIComponent(tagName)}`,
+    `/api/v1/prompt_versions/${encodeURIComponent(versionId)}/tags/${encodeURIComponent(tagName)}`,
     { method: "DELETE" },
   );
   if (!res.ok) {
@@ -568,7 +568,7 @@ export async function createPrompt(
   modelName: string = "gpt-4o-mini",
   temperature: number = 0.7,
 ): Promise<void> {
-  const res = await fetch("/api/phoenix?path=/v1/prompts", {
+  const res = await fetch("/api/v1/prompts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -605,7 +605,7 @@ export async function updatePrompt(
   modelName: string = "gpt-4o-mini",
   temperature: number = 0.7,
 ): Promise<void> {
-  const res = await fetch("/api/phoenix?path=/v1/prompts", {
+  const res = await fetch("/api/v1/prompts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -635,7 +635,7 @@ export async function updatePrompt(
 
 export async function deletePrompt(name: string): Promise<void> {
   const res = await fetch(
-    `/api/phoenix?path=/v1/prompts/${encodeURIComponent(name)}`,
+    `/api/v1/prompts/${encodeURIComponent(name)}`,
     { method: "DELETE" },
   );
   if (!res.ok) {
@@ -646,7 +646,7 @@ export async function deletePrompt(name: string): Promise<void> {
 
 export async function deleteTrace(traceId: string): Promise<void> {
   await fetch(
-    `/api/phoenix?path=/v1/traces/${encodeURIComponent(traceId)}`,
+    `/api/v1/traces/${encodeURIComponent(traceId)}`,
     { method: "DELETE" },
   );
 }

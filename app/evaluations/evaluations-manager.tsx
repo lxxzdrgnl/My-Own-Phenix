@@ -356,7 +356,7 @@ export function EvaluationsManager() {
       if (deleteAnnotations) {
         for (const p of projects) {
           try {
-            await fetch(`/api/phoenix?path=${encodeURIComponent(`/v1/projects/${p.name}/span_annotations`)}`, {
+            await fetch(`/api/v1/projects/${encodeURIComponent(p.name)}/span_annotations`, {
               method: "DELETE",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ name: selectedEval }),

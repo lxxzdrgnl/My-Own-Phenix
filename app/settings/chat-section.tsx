@@ -178,7 +178,7 @@ function ProjectAgentModal({
       .then((data) => setTemplates(data.templates ?? []))
       .catch(() => {});
 
-    fetch("/api/phoenix?path=/v1/projects")
+    fetch("/api/v1/projects")
       .then((r) => r.json())
       .then((data) => {
         const names = (data.data ?? []).map((p: any) => p.name as string).filter((n: string) => n !== "playground");

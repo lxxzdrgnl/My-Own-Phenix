@@ -137,7 +137,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        let spansUrl = `/api/phoenix?path=/v1/projects/${encodeURIComponent(project)}/spans&limit=500`;
+        let spansUrl = `/api/v1/projects/${encodeURIComponent(project)}/spans?limit=500`;
         if (dateRange.from) spansUrl += `&start_time=${encodeURIComponent(dateRange.from.toISOString())}`;
         if (dateRange.to) spansUrl += `&end_time=${encodeURIComponent(dateRange.to.toISOString())}`;
         const spansRes = await fetch(spansUrl);
@@ -163,7 +163,7 @@ export default function DashboardPage() {
         const annResults: AnnotationData[] = [];
         await Promise.all(
           rootSpans.slice(0, 100).map((s: any) =>
-            fetch(`/api/phoenix?path=/v1/projects/${encodeURIComponent(project)}/span_annotations&span_ids=${s.context.span_id}`)
+            fetch(`/api/v1/projects/${encodeURIComponent(project)}/span_annotations?span_ids=${s.context.span_id}`)
               .then((r) => r.json())
               .then((data) => {
                 for (const a of data.data ?? []) {

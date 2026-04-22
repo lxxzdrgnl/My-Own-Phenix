@@ -193,7 +193,7 @@ export function ProjectsManager() {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      await fetch("/api/phoenix?path=/v1/projects", {
+      await fetch("/api/v1/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName.trim(), description: "" }),
@@ -209,7 +209,7 @@ export function ProjectsManager() {
   async function handleDelete(name: string) {
     if (!confirm(`Delete project "${name}"? All traces will be permanently removed.`)) return;
     try {
-      await fetch(`/api/phoenix?path=/v1/projects/${encodeURIComponent(name)}`, {
+      await fetch(`/api/v1/projects/${encodeURIComponent(name)}`, {
         method: "DELETE",
       });
       if (selectedProject === name) {

@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   Database,
   Settings2,
+  FileText,
 } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { signOut } from "firebase/auth";
@@ -78,6 +79,14 @@ export function Nav() {
         <div className="ml-auto flex items-center gap-1">
           {user ? (
             <>
+              <a
+                href="/api/docs"
+                target="_blank"
+                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <FileText className="h-4 w-4" />
+                API
+              </a>
               <button
                 onClick={() => signOut(auth)}
                 className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
