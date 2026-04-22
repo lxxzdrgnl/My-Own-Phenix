@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth-server";
 
 const PHOENIX = process.env.PHOENIX_URL ?? "http://localhost:6006";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const { spanId, name, label, score, explanation } = (await req.json()) as {
     spanId: string;
     name: string;

@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import {
   AssistantRuntimeProvider,
@@ -73,7 +74,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
   const refreshThreads = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/user-threads?userId=${user.uid}&project=${encodeURIComponent(project)}`);
+      const res = await apiFetch(`/api/user-threads?userId=${user.uid}&project=${encodeURIComponent(project)}`);
       if (res.ok) {
         const data = await res.json();
         setThreads(data.threads ?? []);
@@ -90,7 +91,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
   }, [user, refreshThreads]);
 
   useEffect(() => {
-    fetch(`/api/agent-config?project=${encodeURIComponent(project)}`)
+    apiFetch(`/api/agent-config?project=${encodeURIComponent(project)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.config) {
@@ -113,7 +114,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
   // Save a message to Prisma
   const saveMessage = useCallback(async (threadDbId: string, role: string, content: string) => {
     try {
-      await fetch(`/api/user-threads/${threadDbId}/messages`, {
+      await apiFetch(`/api/user-threads/${threadDbId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role, content }),
@@ -153,7 +154,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
           const title = rawText.slice(0, 30) || "New Chat";
 
           try {
-            const res = await fetch("/api/user-threads", {
+            const res = await apiFetch("/api/user-threads", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -245,7 +246,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
     setIsFadingOut(true);
 
     // fade-out 애니메이션과 메시지 로딩을 병렬 처리
-    const messagesPromise = fetch(`/api/user-threads/${thread.id}/messages`)
+    const messagesPromise = apiFetch(`/api/user-threads/${thread.id}/messages`)
       .then((res) => (res.ok ? res.json() : { messages: [] }))
       .catch(() => ({ messages: [] }));
 
@@ -284,7 +285,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
   const handleDeleteThread = useCallback(
     async (id: string) => {
       try {
-        await fetch(`/api/user-threads/${id}`, { method: "DELETE" });
+        await apiFetch(`/api/user-threads/${id}`, { method: "DELETE" });
         setThreads((prev) => prev.filter((t) => t.id !== id));
         if (activeThreadDbId === id) {
           threadIdRef.current = null;

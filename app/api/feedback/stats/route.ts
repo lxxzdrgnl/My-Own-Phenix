@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
 /**
  * GET /api/feedback/stats?project=X
@@ -10,6 +11,8 @@ import { prisma } from "@/lib/prisma";
  * - downCount: messages with "down" feedback
  */
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const project = request.nextUrl.searchParams.get("project");
   if (!project) {
     return NextResponse.json({ error: "project required" }, { status: 400 });

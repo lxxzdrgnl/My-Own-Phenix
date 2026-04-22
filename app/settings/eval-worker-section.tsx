@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,7 @@ export function EvalWorkerSection() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/settings");
+      const res = await apiFetch("/api/settings");
       const data = await res.json();
       setSettings({
         evalWorkerEnabled: data.evalWorkerEnabled ?? DEFAULTS.evalWorkerEnabled,
@@ -54,7 +55,7 @@ export function EvalWorkerSection() {
   async function handleSave() {
     setSaving(true);
     try {
-      await fetch("/api/settings", {
+      await apiFetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),

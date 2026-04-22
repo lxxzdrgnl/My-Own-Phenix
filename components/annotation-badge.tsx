@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useEffect, useState, createContext, useContext } from "react";
 import { User } from "lucide-react";
@@ -26,7 +27,7 @@ function subscribeBadgeLabels(cb: () => void) {
 }
 
 export function refreshBadgeLabels() {
-  fetch("/api/eval-prompts")
+  apiFetch("/api/eval-prompts")
     .then((r) => r.json())
     .then((data) => {
       const labels: Record<string, string> = {};

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(_req);
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
 
   await prisma.thread.delete({ where: { id } });
@@ -16,6 +19,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   const { title } = await req.json();
 

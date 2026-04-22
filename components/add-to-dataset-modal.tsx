@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ export function AddToDatasetModal({ open, onClose, query = "", context = "" }: A
     if (!open) return;
     setEditQuery(query);
     setEditContext(context);
-    fetch("/api/datasets").then((r) => r.json()).then((data) => {
+    apiFetch("/api/datasets").then((r) => r.json()).then((data) => {
       const ds = data.datasets ?? [];
       setDatasets(ds);
       if (ds.length > 0 && !selectedId) setSelectedId(ds[0].id);
@@ -48,7 +49,7 @@ export function AddToDatasetModal({ open, onClose, query = "", context = "" }: A
     try {
       const headers = ["query", "context"];
       const row = { query: editQuery, context: editContext };
-      const res = await fetch("/api/datasets", {
+      const res = await apiFetch("/api/datasets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -76,7 +77,7 @@ export function AddToDatasetModal({ open, onClose, query = "", context = "" }: A
       const dsHeaders = ds ? JSON.parse(ds.headers) : [];
 
       if (dsHeaders.length === 0) {
-        await fetch("/api/datasets", {
+        await apiFetch("/api/datasets", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -95,7 +96,7 @@ export function AddToDatasetModal({ open, onClose, query = "", context = "" }: A
           else if (lower.includes("context") || lower.includes("document") || lower.includes("reference")) row[h] = editContext;
           else row[h] = "";
         }
-        await fetch("/api/datasets/rows", {
+        await apiFetch("/api/datasets/rows", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: selectedId, rows: [row] }),

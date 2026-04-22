@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, ChevronRight, Search, Bot } from "lucide-react";
@@ -184,7 +185,7 @@ export function AgentModelSelector({
   const [agents, setAgents] = useState<AgentOption[]>([]);
 
   useEffect(() => {
-    fetch("/api/providers")
+    apiFetch("/api/providers")
       .then((r) => r.json())
       .then((data) => {
         const active = new Set<string>();
@@ -195,7 +196,7 @@ export function AgentModelSelector({
       })
       .catch(() => {});
 
-    fetch("/api/agent-config")
+    apiFetch("/api/agent-config")
       .then((r) => r.json())
       .then((data) => {
         setAgents(

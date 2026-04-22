@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const userId = req.nextUrl.searchParams.get("userId");
   const project = req.nextUrl.searchParams.get("project") ?? "default";
   if (!userId) {
@@ -16,6 +19,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const { userId, project, layout } = await req.json();
 
   if (!userId || !layout) {

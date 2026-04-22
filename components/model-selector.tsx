@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
@@ -175,7 +176,7 @@ export function ModelSelector({
   const [activeProviders, setActiveProviders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetch("/api/providers")
+    apiFetch("/api/providers")
       .then((r) => r.json())
       .then((data) => {
         const active = new Set<string>();

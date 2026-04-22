@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
 const PHOENIX_ENDPOINT =
   process.env.PHOENIX_COLLECTOR_ENDPOINT ?? "http://localhost:6006";
@@ -79,6 +80,8 @@ async function uploadToPhoenix(spanId: string, label: string, score: number) {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const messageId = request.nextUrl.searchParams.get("messageId");
   const userId = request.nextUrl.searchParams.get("userId");
 
@@ -94,6 +97,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const body = await request.json();
   const { messageId, userId, value } = body as {
     messageId: string;
@@ -135,6 +140,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const body = await request.json();
   const { messageId, userId } = body as { messageId: string; userId: string };
 

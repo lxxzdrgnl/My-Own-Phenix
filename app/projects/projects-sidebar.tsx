@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -64,7 +65,7 @@ export function ProjectsSidebar() {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      await fetch("/api/v1/projects", {
+      await apiFetch("/api/v1/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName.trim(), description: "" }),
@@ -82,7 +83,7 @@ export function ProjectsSidebar() {
   async function handleDelete(name: string) {
     if (!confirm(`Delete project "${name}"? All traces will be permanently removed.`)) return;
     try {
-      await fetch(`/api/v1/projects/${encodeURIComponent(name)}`, {
+      await apiFetch(`/api/v1/projects/${encodeURIComponent(name)}`, {
         method: "DELETE",
       });
       if (currentProject === name) {

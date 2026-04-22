@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -97,7 +98,7 @@ export function DatasetManager() {
   // ── Load datasets ──
   const loadDatasets = useCallback(async () => {
     try {
-      const res = await fetch("/api/datasets");
+      const res = await apiFetch("/api/datasets");
       const data = await res.json();
       setDatasets(data.datasets ?? []);
     } catch {}
@@ -106,12 +107,12 @@ export function DatasetManager() {
   useEffect(() => { loadDatasets(); }, [loadDatasets]);
 
   useEffect(() => {
-    fetch("/api/agent-config").then(r => r.json()).then(d => setAgentConfigs(d.configs ?? [])).catch(() => {});
+    apiFetch("/api/agent-config").then(r => r.json()).then(d => setAgentConfigs(d.configs ?? [])).catch(() => {});
   }, []);
 
   const loadEvals = useCallback(async () => {
     try {
-      const res = await fetch("/api/eval-prompts");
+      const res = await apiFetch("/api/eval-prompts");
       const data = await res.json();
       setEvalOptions(data.prompts ?? []);
     } catch {}
@@ -121,7 +122,7 @@ export function DatasetManager() {
   // ── Load a page of rows ──
   async function loadPage(id: string, p: number) {
     try {
-      const res = await fetch(`/api/datasets/rows?id=${id}&page=${p}&pageSize=${pageSize}`);
+      const res = await apiFetch(`/api/datasets/rows?id=${id}&page=${p}&pageSize=${pageSize}`);
       const data = await res.json();
       setHeaders(data.headers ?? []);
       setRows(data.rows ?? []);
@@ -143,7 +144,7 @@ export function DatasetManager() {
     try {
       const [_, runsRes] = await Promise.all([
         loadPage(id, 0),
-        fetch(`/api/datasets/runs?datasetId=${id}`),
+        apiFetch(`/api/datasets/runs?datasetId=${id}`),
       ]);
       const runsData = await runsRes.json();
       setRuns(runsData.runs ?? []);
@@ -153,7 +154,7 @@ export function DatasetManager() {
   async function loadRun(runId: string) {
     setSelectedRunId(runId); setLiveResults([]); setLiveRunId(null);
     try {
-      const res = await fetch(`/api/datasets/runs/${runId}`);
+      const res = await apiFetch(`/api/datasets/runs/${runId}`);
       const data = await res.json();
       setRunResults(data.rowResults ?? []);
       setRunEvalNames(data.evalNames ?? []);
@@ -164,7 +165,7 @@ export function DatasetManager() {
   async function handleCreate() {
     if (!newName.trim()) return;
     try {
-      const res = await fetch("/api/datasets", {
+      const res = await apiFetch("/api/datasets", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName.trim() }),
       });
@@ -181,13 +182,13 @@ export function DatasetManager() {
   }) {
     const target = importModal.target;
     if (target) {
-      await fetch("/api/datasets/rows", {
+      await apiFetch("/api/datasets/rows", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: target.id, rows: data.rows }),
       });
       await loadDatasets(); selectDataset(target.id);
     } else {
-      const res = await fetch("/api/datasets", {
+      const res = await apiFetch("/api/datasets", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: data.name, fileName: data.fileName, headers: data.headers, rows: data.rows, queryCol: data.queryCol, contextCol: data.contextCol }),
       });
@@ -200,7 +201,7 @@ export function DatasetManager() {
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this dataset?")) return;
-    await fetch("/api/datasets", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    await apiFetch("/api/datasets", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     if (selectedId === id) { setSelectedId(null); setRows([]); setHeaders([]); }
     loadDatasets();
   }
@@ -215,7 +216,7 @@ export function DatasetManager() {
     setGenerating(true); setGenProgress(0);
 
     // Fetch ALL rows, then filter to selected (if any)
-    const allRowsRes = await fetch(`/api/datasets/rows?id=${selectedId}&all=1`);
+    const allRowsRes = await apiFetch(`/api/datasets/rows?id=${selectedId}&all=1`);
     const allRowsData = await allRowsRes.json();
     let allRows: DatasetRow[] = allRowsData.rows ?? [];
     if (selectedRowIndices.size > 0) {
@@ -223,7 +224,7 @@ export function DatasetManager() {
     }
     if (allRows.length === 0) { setGenerating(false); return; }
 
-    const runRes = await fetch("/api/datasets/runs", {
+    const runRes = await apiFetch("/api/datasets/runs", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ datasetId: selectedId, agentSource: selectedAgent, evalNames: [] }),
     });
@@ -240,7 +241,7 @@ export function DatasetManager() {
       try {
         if (selectedAgent.startsWith("llm:")) {
           const model = selectedAgent.replace("llm:", "");
-          const res = await fetch("/api/llm", {
+          const res = await apiFetch("/api/llm", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ model, messages: [{ role: "user", content: query }], temperature: 0.7 }),
           });
@@ -279,12 +280,12 @@ export function DatasetManager() {
       setLiveResults([...results]);
     }
 
-    await fetch(`/api/datasets/runs/${run.id}`, {
+    await apiFetch(`/api/datasets/runs/${run.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rowResults: results, status: cancelRef.current ? "stopped" : "generated" }),
     });
     setGenerating(false); cancelRef.current = false;
-    const runsData = await (await fetch(`/api/datasets/runs?datasetId=${selectedId}`)).json();
+    const runsData = await (await apiFetch(`/api/datasets/runs?datasetId=${selectedId}`)).json();
     setRuns(runsData.runs ?? []);
   }
 
@@ -297,7 +298,7 @@ export function DatasetManager() {
     setEvaluating(true); setEvalProgress(0);
 
     // Fetch ALL rows, filter to selected if any
-    const allRowsRes = await fetch(`/api/datasets/rows?id=${selectedId}&all=1`);
+    const allRowsRes = await apiFetch(`/api/datasets/rows?id=${selectedId}&all=1`);
     const allRowsData = await allRowsRes.json();
     let allRows: DatasetRow[] = allRowsData.rows ?? [];
     if (selectedRowIndices.size > 0) {
@@ -306,7 +307,7 @@ export function DatasetManager() {
 
     const evalNamesList = [...checkedEvals];
     const evalsToRun = evalOptions.filter(e => checkedEvals.has(e.name));
-    await fetch(`/api/datasets/runs/${runId}`, {
+    await apiFetch(`/api/datasets/runs/${runId}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ evalNames: evalNamesList }),
     });
@@ -346,7 +347,7 @@ export function DatasetManager() {
           } else if (eval_.template || evalOverrides[eval_.name]?.template) {
             const effectiveTemplate = evalOverrides[eval_.name]?.template || eval_.template;
             const filled = effectiveTemplate.replace(/\{context\}/g, context || "(no context)").replace(/\{response\}/g, response || "(no response)").replace(/\{query\}/g, query || "(no query)");
-            const res = await fetch("/api/llm", {
+            const res = await apiFetch("/api/llm", {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: filled }], temperature: 0 }),
             });
@@ -363,7 +364,7 @@ export function DatasetManager() {
       }
     }
 
-    await fetch(`/api/datasets/runs/${runId}`, {
+    await apiFetch(`/api/datasets/runs/${runId}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rowResults: updatedResults, status: cancelRef.current ? "stopped" : "completed" }),
     });
@@ -371,13 +372,13 @@ export function DatasetManager() {
     if (liveRunId) setLiveResults([...updatedResults]);
     else setRunResults([...updatedResults]);
     if (selectedId) {
-      const runsData = await (await fetch(`/api/datasets/runs?datasetId=${selectedId}`)).json();
+      const runsData = await (await apiFetch(`/api/datasets/runs?datasetId=${selectedId}`)).json();
       setRuns(runsData.runs ?? []);
     }
   }
 
   async function handleDeleteRun(runId: string) {
-    await fetch(`/api/datasets/runs/${runId}`, { method: "DELETE" });
+    await apiFetch(`/api/datasets/runs/${runId}`, { method: "DELETE" });
     if (selectedRunId === runId) { setSelectedRunId(null); setRunResults([]); setRunEvalNames([]); }
     if (liveRunId === runId) { setLiveRunId(null); setLiveResults([]); }
     setRuns(prev => prev.filter(r => r.id !== runId));
@@ -397,7 +398,7 @@ export function DatasetManager() {
     setRows(prev => prev.map((r, i) => (i === index ? { ...editRowData, _rowIndex: rowIndex } : r)));
     setEditingRowIndex(null);
     if (selectedId) {
-      await fetch("/api/datasets/rows", {
+      await apiFetch("/api/datasets/rows", {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: selectedId, rowIndex, data: editRowData }),
       });
@@ -410,7 +411,7 @@ export function DatasetManager() {
     const rowIndex = (row as any)._rowIndex ?? index;
     if (editingRowIndex === index) setEditingRowIndex(null);
     if (selectedId) {
-      await fetch("/api/datasets/rows", {
+      await apiFetch("/api/datasets/rows", {
         method: "DELETE", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: selectedId, rowIndex }),
       });
@@ -680,7 +681,7 @@ export function DatasetManager() {
                             onClick={async () => {
                               if (!confirm(`Delete ${selectedRowIndices.size} selected prompts?`)) return;
                               if (selectedId) {
-                                await fetch("/api/datasets/rows", {
+                                await apiFetch("/api/datasets/rows", {
                                   method: "DELETE", headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({ id: selectedId, rowIndices: [...selectedRowIndices] }),
                                 });
@@ -1075,7 +1076,7 @@ export function DatasetManager() {
         onConfirm={(sel, ovr) => {
           setCheckedEvals(sel); setEvalOverrides(ovr); loadEvals();
           if (selectedId) {
-            fetch("/api/datasets", {
+            apiFetch("/api/datasets", {
               method: "PUT", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ id: selectedId, evalNames: [...sel], evalOverrides: ovr }),
             });

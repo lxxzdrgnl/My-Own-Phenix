@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useEffect, useCallback } from "react";
 import { Modal, ModalHeader, ModalBody } from "@/components/ui/modal";
@@ -36,7 +37,7 @@ export function AnnotationForm({ open, onClose, spanId, existingAnnotations = []
 
   const loadEvals = useCallback(async () => {
     try {
-      const res = await fetch("/api/eval-prompts");
+      const res = await apiFetch("/api/eval-prompts");
       const data = await res.json();
       setEvalOptions(
         (data.prompts ?? []).map((p: any) => ({
@@ -83,7 +84,7 @@ export function AnnotationForm({ open, onClose, spanId, existingAnnotations = []
     const finalScore = mode === "binary" ? (label === "pass" ? 1.0 : 0.0) : Number(score);
 
     try {
-      const res = await fetch("/api/annotations", {
+      const res = await apiFetch("/api/annotations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

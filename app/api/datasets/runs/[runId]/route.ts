@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
 // GET — returns run metadata + results from DatasetRunResult table
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
+  const auth = await requireAuth(_req);
+  if (auth instanceof NextResponse) return auth;
   const { runId } = await params;
   try {
     const runRows = await prisma.$queryRaw<Array<Record<string, unknown>>>`
@@ -38,6 +41,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ run
 
 // PUT — update run status, evalNames, and/or upsert results
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const { runId } = await params;
   const body = await req.json();
 
@@ -87,6 +92,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ runI
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
+  const auth = await requireAuth(_req);
+  if (auth instanceof NextResponse) return auth;
   const { runId } = await params;
   try {
     await prisma.$executeRaw`DELETE FROM DatasetRunResult WHERE runId = ${runId}`;

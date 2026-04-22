@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const project = req.nextUrl.searchParams.get("project");
 
   // If no project specified, return all configs (for alias lookup)
@@ -15,6 +18,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const body = await req.json();
   const { project, alias, templateId, agentType, endpoint, assistantId } = body as {
     project: string;
@@ -52,6 +57,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const project = req.nextUrl.searchParams.get("project");
   if (!project) {
     return NextResponse.json({ error: "project query param required" }, { status: 400 });

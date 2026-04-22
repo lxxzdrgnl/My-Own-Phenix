@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useEffect, useCallback } from "react";
 import { Modal, ModalHeader, ModalBody } from "@/components/ui/modal";
@@ -90,7 +91,7 @@ export function EvalSelectorModal({ open, onClose, datasetName, checkedEvals, ev
 
   const loadEvals = useCallback(async () => {
     try {
-      const res = await fetch("/api/eval-prompts");
+      const res = await apiFetch("/api/eval-prompts");
       const data = await res.json();
       setEvals(data.prompts ?? []);
     } catch {}
@@ -191,7 +192,7 @@ export function EvalSelectorModal({ open, onClose, datasetName, checkedEvals, ev
     } else {
       // Save globally
       try {
-        await fetch("/api/eval-prompts", {
+        await apiFetch("/api/eval-prompts", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -231,7 +232,7 @@ export function EvalSelectorModal({ open, onClose, datasetName, checkedEvals, ev
     if (!name) return;
     setSaving(true);
     try {
-      await fetch("/api/eval-prompts", {
+      await apiFetch("/api/eval-prompts", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

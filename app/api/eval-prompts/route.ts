@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureBuiltInEvals } from "@/lib/eval-seed";
+import { requireAuth } from "@/lib/auth-server";
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   await ensureBuiltInEvals();
   const projectId = request.nextUrl.searchParams.get("projectId");
 
@@ -21,6 +24,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const body = await request.json();
   const { name, projectId, evalType, outputMode, template, ruleConfig, badgeLabel, isCustom } = body as {
     name: string;
@@ -79,6 +84,8 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const name = request.nextUrl.searchParams.get("name");
   const projectId = request.nextUrl.searchParams.get("projectId");
   if (!name) {

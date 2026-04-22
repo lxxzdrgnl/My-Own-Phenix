@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const datasetId = request.nextUrl.searchParams.get("datasetId");
   if (!datasetId) return NextResponse.json({ error: "datasetId required" }, { status: 400 });
 
@@ -19,6 +22,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const { datasetId, agentSource, evalNames } = await request.json();
   if (!datasetId || !agentSource) {
     return NextResponse.json({ error: "datasetId and agentSource required" }, { status: 400 });

@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -94,7 +95,7 @@ export function AddWidgetMenu({ onAdd }: AddWidgetMenuProps) {
 
   const loadCustomEvals = useCallback(async () => {
     try {
-      const res = await fetch("/api/eval-prompts");
+      const res = await apiFetch("/api/eval-prompts");
       const data = await res.json();
       setCustomEvals((data.prompts ?? []).filter((p: CustomEval) => p.isCustom));
     } catch {}

@@ -1,3 +1,5 @@
+import { apiFetch } from "@/lib/api-client";
+
 export interface Trace {
   spanId: string;
   traceId: string;
@@ -66,7 +68,7 @@ export interface Project {
 }
 
 export async function fetchProjects(): Promise<Project[]> {
-  const res = await fetch("/api/v1/projects");
+  const res = await apiFetch("/api/v1/projects");
   const data = await res.json();
   const projects = (data.data ?? []).map((p: any) => ({ id: p.name, name: p.name }));
 
@@ -120,7 +122,7 @@ async function fetchSpansAndAnnotations(
   if (startTime) spansUrl += `&start_time=${encodeURIComponent(startTime)}`;
   if (endTime) spansUrl += `&end_time=${encodeURIComponent(endTime)}`;
 
-  const spansRes = await fetch(spansUrl);
+  const spansRes = await apiFetch(spansUrl);
   const spansData = await spansRes.json();
   const allSpans: any[] = spansData.data ?? [];
 
@@ -133,7 +135,7 @@ async function fetchSpansAndAnnotations(
   await Promise.all(
     chunks.map((ids) => {
       const params = ids.map((id) => `span_ids=${id}`).join("&");
-      return fetch(
+      return apiFetch(
         `/api/v1/projects/${encodeURIComponent(projectName)}/span_annotations?${params}&limit=1000`,
       )
         .then((r) => r.json())
@@ -495,7 +497,7 @@ export async function fetchTraceTrees(
 }
 
 export async function fetchPrompts(): Promise<PromptInfo[]> {
-  const res = await fetch("/api/v1/prompts");
+  const res = await apiFetch("/api/v1/prompts");
   const data = await res.json();
   return data.data ?? [];
 }
@@ -503,7 +505,7 @@ export async function fetchPrompts(): Promise<PromptInfo[]> {
 export async function fetchPromptVersions(
   name: string,
 ): Promise<PromptVersion[]> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/prompts/${encodeURIComponent(name)}/versions`,
   );
   const data = await res.json();
@@ -519,7 +521,7 @@ export interface PromptTag {
 export async function fetchPromptVersionTags(
   versionId: string,
 ): Promise<PromptTag[]> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/prompt_versions/${encodeURIComponent(versionId)}/tags`,
   );
   const data = await res.json();
@@ -530,7 +532,7 @@ export async function addPromptVersionTag(
   versionId: string,
   tagName: string,
 ): Promise<void> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/prompt_versions/${encodeURIComponent(versionId)}/tags`,
     {
       method: "POST",
@@ -548,7 +550,7 @@ export async function deletePromptVersionTag(
   versionId: string,
   tagName: string,
 ): Promise<void> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/prompt_versions/${encodeURIComponent(versionId)}/tags/${encodeURIComponent(tagName)}`,
     { method: "DELETE" },
   );
@@ -568,7 +570,7 @@ export async function createPrompt(
   modelName: string = "gpt-4o-mini",
   temperature: number = 0.7,
 ): Promise<void> {
-  const res = await fetch("/api/v1/prompts", {
+  const res = await apiFetch("/api/v1/prompts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -605,7 +607,7 @@ export async function updatePrompt(
   modelName: string = "gpt-4o-mini",
   temperature: number = 0.7,
 ): Promise<void> {
-  const res = await fetch("/api/v1/prompts", {
+  const res = await apiFetch("/api/v1/prompts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -634,7 +636,7 @@ export async function updatePrompt(
 }
 
 export async function deletePrompt(name: string): Promise<void> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/prompts/${encodeURIComponent(name)}`,
     { method: "DELETE" },
   );
@@ -645,7 +647,7 @@ export async function deletePrompt(name: string): Promise<void> {
 }
 
 export async function deleteTrace(traceId: string): Promise<void> {
-  await fetch(
+  await apiFetch(
     `/api/v1/traces/${encodeURIComponent(traceId)}`,
     { method: "DELETE" },
   );
@@ -665,7 +667,7 @@ export async function callLLM(
 
   const params = version.invocation_parameters?.openai ?? {};
 
-  const res = await fetch("/api/llm", {
+  const res = await apiFetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

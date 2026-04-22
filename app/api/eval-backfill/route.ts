@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { callLlm } from "@/lib/llm-providers";
+import { requireAuth } from "@/lib/auth-server";
 
 const PHOENIX = process.env.PHOENIX_URL ?? "http://localhost:6006";
 
@@ -118,6 +119,8 @@ const PASS_LABELS = new Set(["pass", "true", "yes", "correct", "factual", "faith
 // ── POST /api/eval-backfill ──
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const { projectId, evalName, startDate, endDate } = (await req.json()) as {
     projectId: string;
     evalName: string;

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt, maskApiKey } from "@/lib/crypto";
+import { requireAuth } from "@/lib/auth-server";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const decryptParam = req.nextUrl.searchParams.get("decrypt");
   const providers = await prisma.llmProvider.findMany({ orderBy: { createdAt: "asc" } });
 
@@ -19,6 +22,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const { provider, apiKey } = (await req.json()) as { provider: string; apiKey: string };
 
   if (!provider || !apiKey) {

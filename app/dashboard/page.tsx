@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useCallback, useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
@@ -95,7 +96,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return;
     setLayoutLoaded(false);
-    fetch(`/api/dashboard/layout?userId=${user.uid}&project=${encodeURIComponent(project)}`)
+    apiFetch(`/api/dashboard/layout?userId=${user.uid}&project=${encodeURIComponent(project)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.layout) {
@@ -123,7 +124,7 @@ export default function DashboardPage() {
       const wc = newColors ?? widgetColors;
       // Keep layouts state in sync with what the grid reports
       setLayouts([...newLayouts] as LayoutItem[]);
-      fetch("/api/dashboard/layout", {
+      apiFetch("/api/dashboard/layout", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.uid, project, layout: JSON.stringify({ widgets: w, layouts: newLayouts, viewModes: vm, widgetColors: wc }) }),
@@ -140,7 +141,7 @@ export default function DashboardPage() {
         let spansUrl = `/api/v1/projects/${encodeURIComponent(project)}/spans?limit=500`;
         if (dateRange.from) spansUrl += `&start_time=${encodeURIComponent(dateRange.from.toISOString())}`;
         if (dateRange.to) spansUrl += `&end_time=${encodeURIComponent(dateRange.to.toISOString())}`;
-        const spansRes = await fetch(spansUrl);
+        const spansRes = await apiFetch(spansUrl);
         const spansData = await spansRes.json();
         const allSpans: any[] = spansData.data ?? [];
 
@@ -163,7 +164,7 @@ export default function DashboardPage() {
         const annResults: AnnotationData[] = [];
         await Promise.all(
           rootSpans.slice(0, 100).map((s: any) =>
-            fetch(`/api/v1/projects/${encodeURIComponent(project)}/span_annotations?span_ids=${s.context.span_id}`)
+            apiFetch(`/api/v1/projects/${encodeURIComponent(project)}/span_annotations?span_ids=${s.context.span_id}`)
               .then((r) => r.json())
               .then((data) => {
                 for (const a of data.data ?? []) {

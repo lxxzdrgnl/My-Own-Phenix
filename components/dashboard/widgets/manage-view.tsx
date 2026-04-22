@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useCallback, useEffect, useState } from "react";
 import { StatCard } from "@/components/dashboard/widgets/stat-card";
@@ -124,8 +125,8 @@ export function ManageView({ projectId, className }: ManageViewProps) {
     setLoading(true);
     try {
       const [risksRes, incidentsRes] = await Promise.all([
-        fetch(`/api/risks?projectId=${encodeURIComponent(projectId)}`),
-        fetch(`/api/incidents?projectId=${encodeURIComponent(projectId)}`),
+        apiFetch(`/api/risks?projectId=${encodeURIComponent(projectId)}`),
+        apiFetch(`/api/incidents?projectId=${encodeURIComponent(projectId)}`),
       ]);
       if (risksRes.ok) {
         const data = await risksRes.json();
@@ -148,7 +149,7 @@ export function ManageView({ projectId, className }: ManageViewProps) {
   async function handleAddRisk() {
     if (!newRisk.name.trim()) return;
     try {
-      await fetch("/api/risks", {
+      await apiFetch("/api/risks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...newRisk, projectId, status: "OPEN" }),
@@ -161,7 +162,7 @@ export function ManageView({ projectId, className }: ManageViewProps) {
 
   async function handleUpdateStatus(riskId: string, status: string) {
     try {
-      await fetch("/api/risks", {
+      await apiFetch("/api/risks", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: riskId, status, resolvedAt: status === "MITIGATED" ? new Date().toISOString() : null }),

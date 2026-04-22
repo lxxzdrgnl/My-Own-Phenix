@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { fetchTraces, fetchTraceTrees, type Trace, type TraceTree } from "@/lib/phoenix";
@@ -168,7 +169,7 @@ export function ProjectView({ projectName }: { projectName: string }) {
   const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | undefined>();
   const loadFeedbackStats = useCallback(async () => {
     try {
-      const res = await fetch(`/api/feedback/stats?project=${encodeURIComponent(projectName)}`);
+      const res = await apiFetch(`/api/feedback/stats?project=${encodeURIComponent(projectName)}`);
       if (res.ok) {
         const data = await res.json();
         setFeedbackStats({ total: data.totalResponses, downCount: data.downCount });
@@ -220,8 +221,8 @@ export function ProjectView({ projectName }: { projectName: string }) {
   const loadRiskStats = useCallback(async () => {
     try {
       const [risksRes, incidentsRes] = await Promise.all([
-        fetch(`/api/risks?projectId=${encodeURIComponent(projectName)}`).then((r) => r.json()).catch(() => ({ risks: [] })),
-        fetch(`/api/incidents?projectId=${encodeURIComponent(projectName)}`).then((r) => r.json()).catch(() => ({ incidents: [] })),
+        apiFetch(`/api/risks?projectId=${encodeURIComponent(projectName)}`).then((r) => r.json()).catch(() => ({ risks: [] })),
+        apiFetch(`/api/incidents?projectId=${encodeURIComponent(projectName)}`).then((r) => r.json()).catch(() => ({ incidents: [] })),
       ]);
       const risks = risksRes.risks ?? [];
       const incidents = incidentsRes.incidents ?? [];

@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState } from "react";
 import { type RawSpan, type TraceTree, type Annotation } from "@/lib/phoenix";
@@ -525,7 +526,7 @@ export function SpanTreeView({
     if (!projectName) return;
     if (!confirm(`Delete "${annotationName}" annotation?`)) return;
     try {
-      await fetch(`/api/v1/projects/${encodeURIComponent(projectName)}/span_annotations`, {
+      await apiFetch(`/api/v1/projects/${encodeURIComponent(projectName)}/span_annotations`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: annotationName, span_id: spanId }),

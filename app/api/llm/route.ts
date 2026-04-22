@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callLlm } from "@/lib/llm-providers";
+import { requireAuth } from "@/lib/auth-server";
 
 const PHOENIX = process.env.PHOENIX_URL ?? "http://localhost:6006";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const { messages, model, temperature, promptLabel } = await req.json();
   const usedModel = model || "gpt-4o-mini";
 

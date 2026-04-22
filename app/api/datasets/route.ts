@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const datasets = await prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT id, name, fileName, headers, queryCol, contextCol, rowCount, createdAt, updatedAt
@@ -15,6 +18,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const body = await request.json();
   const { name, fileName, headers, queryCol, contextCol, rows } = body;
 
@@ -51,6 +56,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const body = await request.json();
   const { id, ...data } = body;
 
@@ -112,6 +119,8 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const { id } = await request.json();
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });

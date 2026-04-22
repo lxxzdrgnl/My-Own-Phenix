@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, Bot } from "lucide-react";
@@ -59,8 +60,8 @@ export function AgentConfigModal({ open, onClose, project, onSaved }: AgentConfi
     setLoading(true);
     try {
       const [agentsRes, configRes] = await Promise.all([
-        fetch("/api/agent-templates"),
-        fetch(`/api/agent-config?project=${encodeURIComponent(project)}`),
+        apiFetch("/api/agent-templates"),
+        apiFetch(`/api/agent-config?project=${encodeURIComponent(project)}`),
       ]);
       const agentsData = await agentsRes.json();
       setAgents(agentsData.templates ?? []);
@@ -100,7 +101,7 @@ export function AgentConfigModal({ open, onClose, project, onSaved }: AgentConfi
 
     setSaving(true);
     try {
-      const res = await fetch("/api/agent-config", {
+      const res = await apiFetch("/api/agent-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -128,7 +129,7 @@ export function AgentConfigModal({ open, onClose, project, onSaved }: AgentConfi
   async function handleDeleteAgent(a: AgentEntry) {
     if (!confirm(`Delete agent "${a.name}"?`)) return;
     try {
-      await fetch(`/api/agent-templates?id=${a.id}`, { method: "DELETE" });
+      await apiFetch(`/api/agent-templates?id=${a.id}`, { method: "DELETE" });
       if (selectedAgentId === a.id) setSelectedAgentId("");
       await load();
     } catch {}
@@ -358,7 +359,7 @@ function AgentFormModal({ mode, initial, onClose, onSave }: AgentFormModalProps)
       };
       if (mode === "edit" && initial?.id) body.id = initial.id;
 
-      const res = await fetch("/api/agent-templates", {
+      const res = await apiFetch("/api/agent-templates", {
         method: mode === "create" ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

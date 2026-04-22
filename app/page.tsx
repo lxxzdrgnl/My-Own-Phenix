@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default function Home() {
 
   const handleProjectAdd = async (name: string) => {
     try {
-      const res = await fetch(`/api/v1/projects`, {
+      const res = await apiFetch(`/api/v1/projects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, description: "" }),

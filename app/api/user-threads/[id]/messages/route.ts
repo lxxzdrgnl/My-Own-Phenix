@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(_req);
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
 
   const rawMessages = await prisma.message.findMany({
@@ -29,6 +32,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   const { role, content } = await req.json();
 

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
 
 // GET — paginated rows from DatasetRow table
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const id = request.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -62,6 +65,8 @@ export async function GET(request: NextRequest) {
 
 // PUT — edit a single row by rowIndex
 export async function PUT(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const { id, rowIndex, data } = await request.json();
   if (!id || rowIndex === undefined || !data) {
     return NextResponse.json({ error: "id, rowIndex, and data required" }, { status: 400 });
@@ -82,6 +87,8 @@ export async function PUT(request: NextRequest) {
 
 // DELETE — delete row(s) by rowIndex or rowIndices (batch)
 export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const body = await request.json();
   const { id, rowIndex, rowIndices } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
@@ -121,6 +128,8 @@ export async function DELETE(request: NextRequest) {
 
 // POST — append rows
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const { id, rows: newRows } = await request.json();
   if (!id || !newRows) return NextResponse.json({ error: "id and rows required" }, { status: 400 });
 

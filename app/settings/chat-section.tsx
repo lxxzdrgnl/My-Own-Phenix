@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useCallback, useEffect } from "react";
 import { Trash2, Bot, Pencil, Plus } from "lucide-react";
@@ -37,7 +38,7 @@ export function ChatSection() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/agent-config");
+      const res = await apiFetch("/api/agent-config");
       const data = await res.json();
       setConfigs(data.configs ?? []);
     } catch {}
@@ -48,7 +49,7 @@ export function ChatSection() {
 
   async function handleDisconnect(project: string) {
     if (!confirm(`Disconnect agent from project "${project}"?`)) return;
-    await fetch(`/api/agent-config?project=${encodeURIComponent(project)}`, { method: "DELETE" });
+    await apiFetch(`/api/agent-config?project=${encodeURIComponent(project)}`, { method: "DELETE" });
     await load();
   }
 
@@ -173,12 +174,12 @@ function ProjectAgentModal({
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
-    fetch("/api/agent-templates")
+    apiFetch("/api/agent-templates")
       .then((r) => r.json())
       .then((data) => setTemplates(data.templates ?? []))
       .catch(() => {});
 
-    fetch("/api/v1/projects")
+    apiFetch("/api/v1/projects")
       .then((r) => r.json())
       .then((data) => {
         const names = (data.data ?? []).map((p: any) => p.name as string).filter((n: string) => n !== "playground");
@@ -196,7 +197,7 @@ function ProjectAgentModal({
     setSaving(true);
 
     try {
-      const res = await fetch("/api/agent-config", {
+      const res = await apiFetch("/api/agent-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

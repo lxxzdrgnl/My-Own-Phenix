@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useCallback } from "react";
 import { ThumbsUp, ThumbsDown, Copy, Check } from "lucide-react";
@@ -23,7 +24,7 @@ export function MessageFeedback({ messageId, content, initialValue = null }: Mes
       if (value === clicked) {
         // Cancel: optimistic
         setValue(null);
-        fetch("/api/feedback", {
+        apiFetch("/api/feedback", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messageId, userId: user.uid }),
@@ -31,7 +32,7 @@ export function MessageFeedback({ messageId, content, initialValue = null }: Mes
       } else {
         // Select: optimistic
         setValue(clicked);
-        fetch("/api/feedback", {
+        apiFetch("/api/feedback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messageId, userId: user.uid, value: clicked }),

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth-server";
 
 const TEST_ENDPOINTS: Record<string, { url: string; buildRequest: (key: string) => { headers: Record<string, string>; body: string } }> = {
   openai: {
@@ -40,6 +41,8 @@ const TEST_ENDPOINTS: Record<string, { url: string; buildRequest: (key: string) 
 };
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth instanceof NextResponse) return auth;
   const { provider, apiKey } = (await req.json()) as { provider: string; apiKey: string };
 
   if (!provider || !apiKey) {

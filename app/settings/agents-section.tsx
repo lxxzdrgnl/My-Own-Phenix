@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -36,7 +37,7 @@ export function AgentsSection() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/agent-templates");
+      const res = await apiFetch("/api/agent-templates");
       const data = await res.json();
       setAgents(data.templates ?? []);
     } catch {}
@@ -47,7 +48,7 @@ export function AgentsSection() {
 
   async function handleDelete(agent: AgentEntry) {
     if (!confirm(`Delete agent "${agent.name}" and disconnect all projects using it?`)) return;
-    await fetch(`/api/agent-templates?id=${agent.id}`, { method: "DELETE" });
+    await apiFetch(`/api/agent-templates?id=${agent.id}`, { method: "DELETE" });
     await load();
   }
 
@@ -239,7 +240,7 @@ function AgentFormModal({ mode, initial, onClose, onSave }: {
       };
       if (mode === "edit" && initial?.id) body.id = initial.id;
 
-      const res = await fetch("/api/agent-templates", {
+      const res = await apiFetch("/api/agent-templates", {
         method: mode === "create" ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

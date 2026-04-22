@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState, useCallback, useEffect } from "react";
 import { CheckCircle, XCircle, Loader2, Eye, EyeOff } from "lucide-react";
@@ -27,7 +28,7 @@ export function ProvidersSection() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/providers");
+      const res = await apiFetch("/api/providers");
       const data = await res.json();
       setProviders(data.providers ?? []);
     } catch {}
@@ -113,13 +114,13 @@ function ProviderRow({
     setSaving(true);
     try {
       if (existing) {
-        await fetch(`/api/providers/${existing.id}`, {
+        await apiFetch(`/api/providers/${existing.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ apiKey }),
         });
       } else {
-        await fetch("/api/providers", {
+        await apiFetch("/api/providers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ provider: providerKey, apiKey }),
@@ -137,7 +138,7 @@ function ProviderRow({
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch("/api/providers/test", {
+      const res = await apiFetch("/api/providers/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider: providerKey, apiKey: apiKey.trim() }),
@@ -152,7 +153,7 @@ function ProviderRow({
   async function handleDelete() {
     if (!existing) return;
     setDeleting(true);
-    await fetch(`/api/providers/${existing.id}`, { method: "DELETE" });
+    await apiFetch(`/api/providers/${existing.id}`, { method: "DELETE" });
     setTestResult(null);
     onUpdate();
     setDeleting(false);

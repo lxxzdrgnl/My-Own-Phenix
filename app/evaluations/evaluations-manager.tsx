@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useEffect, useState, useCallback } from "react";
 import { fetchProjects, type Project } from "@/lib/phoenix";
@@ -173,8 +174,8 @@ export function EvaluationsManager() {
   const loadProjectConfig = useCallback(async (pid: string) => {
     try {
       const [configRes, promptsRes] = await Promise.all([
-        fetch(`/api/eval-config?projectId=${encodeURIComponent(pid)}`).then((r) => r.json()),
-        fetch(`/api/eval-prompts?projectId=${encodeURIComponent(pid)}`).then((r) => r.json()),
+        apiFetch(`/api/eval-config?projectId=${encodeURIComponent(pid)}`).then((r) => r.json()),
+        apiFetch(`/api/eval-prompts?projectId=${encodeURIComponent(pid)}`).then((r) => r.json()),
       ]);
       setProjectConfigs(configRes.configs ?? []);
       setGlobalPrompts(promptsRes.prompts ?? []);
@@ -184,7 +185,7 @@ export function EvaluationsManager() {
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => { if (selectedProject) loadProjectConfig(selectedProject); }, [selectedProject, loadProjectConfig]);
   useEffect(() => {
-    fetch("/api/settings").then((r) => r.json()).then((data) => {
+    apiFetch("/api/settings").then((r) => r.json()).then((data) => {
       if (data.defaultEvalModel) {
         setDefaultEvalModel(data.defaultEvalModel);
         setNewEvalModel(data.defaultEvalModel);
@@ -246,7 +247,7 @@ export function EvaluationsManager() {
     });
 
     try {
-      await fetch("/api/eval-config", {
+      await apiFetch("/api/eval-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: selectedProject, evalName, enabled: newEnabled }),
@@ -270,7 +271,7 @@ export function EvaluationsManager() {
     setSaving(true);
     const isCustom = !BUILT_IN_EVALS.includes(selectedEval);
     try {
-      await fetch("/api/eval-prompts", {
+      await apiFetch("/api/eval-prompts", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -296,7 +297,7 @@ export function EvaluationsManager() {
     if (!selectedEval || !selectedProject) return;
     setSaving(true);
     try {
-      await fetch("/api/eval-config", {
+      await apiFetch("/api/eval-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -315,7 +316,7 @@ export function EvaluationsManager() {
   async function handleClearOverride() {
     if (!selectedEval || !selectedProject) return;
     try {
-      await fetch("/api/eval-config", {
+      await apiFetch("/api/eval-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -352,11 +353,11 @@ export function EvaluationsManager() {
     );
 
     try {
-      await fetch(`/api/eval-prompts?name=${encodeURIComponent(selectedEval)}`, { method: "DELETE" });
+      await apiFetch(`/api/eval-prompts?name=${encodeURIComponent(selectedEval)}`, { method: "DELETE" });
       if (deleteAnnotations) {
         for (const p of projects) {
           try {
-            await fetch(`/api/v1/projects/${encodeURIComponent(p.name)}/span_annotations`, {
+            await apiFetch(`/api/v1/projects/${encodeURIComponent(p.name)}/span_annotations`, {
               method: "DELETE",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ name: selectedEval }),
@@ -374,7 +375,7 @@ export function EvaluationsManager() {
     setBackfilling(true);
     setBackfillResult(null);
     try {
-      const res = await fetch("/api/eval-backfill", {
+      const res = await apiFetch("/api/eval-backfill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -397,7 +398,7 @@ export function EvaluationsManager() {
     if (!name || !selectedProject) return;
     try {
       // Create globally (visible to all projects)
-      await fetch("/api/eval-prompts", {
+      await apiFetch("/api/eval-prompts", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -411,7 +412,7 @@ export function EvaluationsManager() {
         }),
       });
       // Enable only for the current project
-      await fetch("/api/eval-config", {
+      await apiFetch("/api/eval-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: selectedProject, evalName: name, enabled: true }),
@@ -458,7 +459,7 @@ export function EvaluationsManager() {
         messages = [{ role: "user", content: replacePlaceholders(editTemplate) }];
       }
 
-      const res = await fetch("/api/llm", {
+      const res = await apiFetch("/api/llm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "gpt-4o-mini", messages, temperature: 0 }),
