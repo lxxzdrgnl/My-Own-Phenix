@@ -26,6 +26,7 @@ import {
   Database,
 } from "lucide-react";
 import { Nav } from "@/components/nav";
+import { Sidebar } from "@/components/ui/sidebar";
 import { AnnotationBadges } from "@/components/annotation-badge";
 import { AddToDatasetModal } from "@/components/add-to-dataset-modal";
 import { PromptEditModal } from "@/components/prompt-edit-modal";
@@ -320,7 +321,7 @@ export function Playground() {
 
       <div className="flex min-h-0 flex-1">
         {/* ── LEFT: Trace list ── */}
-        <div className="flex w-80 shrink-0 flex-col border-r bg-muted/5">
+        <Sidebar className="w-80">
           {/* Header */}
           <div className="relative z-10 border-b px-3 py-3">
             <div className="flex items-center gap-2">
@@ -420,7 +421,7 @@ export function Playground() {
                       if (deleteMode) toggleSelect(t.traceId);
                       else selectTrace(t);
                     }}
-                    className={`group cursor-pointer border-b transition-colors hover:bg-accent/40 ${active && !deleteMode ? "bg-accent" : ""} ${checked ? "bg-muted/50" : ""}`}
+                    className={`group cursor-pointer border-b transition-colors hover:bg-accent/50 ${active && !deleteMode ? "bg-accent font-medium" : "text-muted-foreground"} ${checked ? "bg-muted/50" : ""}`}
                   >
                     <div className="flex gap-2.5 px-3 py-2.5">
                       {deleteMode ? (
@@ -463,7 +464,7 @@ export function Playground() {
               })
             )}
           </div>
-        </div>
+        </Sidebar>
 
         {/* ── RIGHT: Scrollable columns + fixed action bar ── */}
         <div className="flex min-h-0 min-w-0 flex-1">

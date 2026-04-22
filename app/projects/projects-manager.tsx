@@ -28,6 +28,7 @@ import { Nav } from "@/components/nav";
 import { Input } from "@/components/ui/input";
 import { LoadingState, EmptyState } from "@/components/ui/empty-state";
 import { DateRangePicker, getPresetRange, type DateRange } from "@/components/ui/date-range-picker";
+import { Sidebar, SidebarItemDiv } from "@/components/ui/sidebar";
 
 
 function formatMs(ms: number): string {
@@ -384,7 +385,7 @@ export function ProjectsManager() {
 
       <div className="flex min-h-0 flex-1">
         {/* Left Sidebar: Project List */}
-        <div className="flex w-64 shrink-0 flex-col border-r bg-muted/5">
+        <Sidebar>
           {/* Create */}
           <div className="border-b px-3 py-3">
             <div className="flex gap-1.5">
@@ -416,15 +417,13 @@ export function ProjectsManager() {
             {projects.map((p, idx) => {
               const active = p.name === selectedProject;
               return (
-                <div
+                <SidebarItemDiv
                   key={p.name}
+                  active={active}
                   onClick={() => setSelectedProject(p.name)}
-                  className={`group flex cursor-pointer items-center gap-1.5 border-b px-2 py-2 transition-colors hover:bg-accent/40 ${
-                    active ? "bg-accent" : ""
-                  }`}
                 >
                   <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30" />
-                  <p className="flex-1 min-w-0 text-sm font-medium truncate">
+                  <p className="flex-1 min-w-0 truncate">
                     {p.name}
                   </p>
                   {/* Order buttons */}
@@ -454,19 +453,16 @@ export function ProjectsManager() {
                   >
                     <Trash2 className="h-3 w-3 text-muted-foreground" />
                   </button>
-                </div>
+                </SidebarItemDiv>
               );
             })}
           </div>
-        </div>
+        </Sidebar>
 
         {/* Center: Project Detail */}
         <div className="flex-1 overflow-y-auto">
           {!selectedProject ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-              <FolderOpen className="h-12 w-12 opacity-15" />
-              <p className="text-sm">Select a project</p>
-            </div>
+            <EmptyState icon={FolderOpen} title="Select a project" className="h-full" />
           ) : tracesLoading ? (
             <LoadingState className="h-full" />
           ) : (
@@ -476,7 +472,7 @@ export function ProjectsManager() {
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h1 className="text-2xl font-bold">{selectedProject}</h1>
+                      <h1 className="text-xl font-semibold tracking-tight">{selectedProject}</h1>
                       <p className="text-sm text-muted-foreground">Project overview</p>
                     </div>
                     <DateRangePicker value={dateRange} onChange={setDateRange} />
@@ -669,9 +665,12 @@ export function ProjectsManager() {
                     </div>
 
                     {traceTrees.length === 0 ? (
-                      <p className="py-12 text-center text-muted-foreground">
-                        {traces.length === 0 ? "No traces found for this project" : "No traces match the current filters"}
-                      </p>
+                      <EmptyState
+                        icon={Search}
+                        title={traces.length === 0 ? "No traces found" : "No traces match the current filters"}
+                        description={traces.length === 0 ? "This project has no traces yet." : "Try adjusting your filters."}
+                        className="py-12"
+                      />
                     ) : (
                       <SpanTreeView traces={traceTrees} projectName={selectedProject ?? undefined} onRefresh={loadTraces} />
                     )}

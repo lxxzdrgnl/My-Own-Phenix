@@ -18,6 +18,7 @@ import { Nav } from "@/components/nav";
 import { useAuth } from "@/lib/auth-context";
 import { ProjectSelector } from "@/components/project-selector";
 import { AgentConfigModal } from "@/components/agent-config-modal";
+import { Sidebar, SidebarItemDiv } from "@/components/ui/sidebar";
 
 const attachmentAdapter = new CompositeAttachmentAdapter([
   new SimpleImageAttachmentAdapter(),
@@ -302,7 +303,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
         <div className="flex flex-1 min-h-0">
           {/* Sidebar */}
           {user && sidebarOpen && (
-            <div className="flex w-64 flex-col border-r bg-muted/30 shrink-0">
+            <Sidebar>
               <div className="flex items-center justify-between px-3 py-2 border-b">
                 <span className="text-sm font-semibold">Chat History</span>
                 <button
@@ -346,13 +347,10 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
                   </p>
                 )}
                 {threads.map((thread) => (
-                  <div
+                  <SidebarItemDiv
                     key={thread.id}
-                    className={`group flex items-center justify-between rounded-md px-3 py-2 text-sm cursor-pointer transition-colors ${
-                      activeThreadDbId === thread.id
-                        ? "bg-accent text-accent-foreground"
-                        : "hover:bg-muted"
-                    }`}
+                    active={activeThreadDbId === thread.id}
+                    className="justify-between"
                     onClick={() => handleSelectThread(thread)}
                   >
                     <span className="truncate flex-1 pr-1">{thread.title}</span>
@@ -365,7 +363,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
-                  </div>
+                  </SidebarItemDiv>
                 ))}
               </div>
 
@@ -379,7 +377,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
                   Sign out
                 </button>
               </div>
-            </div>
+            </Sidebar>
           )}
 
           {user && !sidebarOpen && (

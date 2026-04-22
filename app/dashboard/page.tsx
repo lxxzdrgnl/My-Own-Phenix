@@ -240,7 +240,7 @@ export default function DashboardPage() {
     <div className="flex h-dvh flex-col">
       <Nav />
       <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3">
-        <h1 className="text-lg font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
         <div className="h-4 w-px bg-border/60" />
         <ProjectSelector project={project} projects={projects} onChange={setProject} />
         <DateRangePicker value={dateRange} onChange={setDateRange} />

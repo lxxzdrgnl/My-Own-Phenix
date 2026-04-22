@@ -12,6 +12,8 @@ import {
   Database, Download, ChevronDown, Pencil, Check, X, Settings2,
   ChevronRight, FlaskConical, List,
 } from "lucide-react";
+import { LoadingState, EmptyState } from "@/components/ui/empty-state";
+import { Sidebar, SidebarHeader, SidebarItemDiv } from "@/components/ui/sidebar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -462,9 +464,9 @@ export function DatasetManager() {
     <div className="flex min-h-0 flex-1 overflow-hidden">
 
       {/* ── Left sidebar ── */}
-      <div className="flex w-56 shrink-0 flex-col border-r">
+      <Sidebar>
         <div className="flex items-center justify-between px-3 pt-3 pb-1">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Datasets</p>
+          <SidebarHeader>Datasets</SidebarHeader>
           <button
             onClick={() => setCreating(true)}
             className="rounded p-1 hover:bg-muted"
@@ -489,15 +491,12 @@ export function DatasetManager() {
         )}
 
         <div className="flex-1 overflow-y-auto px-2">
-          {loading && <p className="py-6 text-center text-[10px] text-muted-foreground">Loading...</p>}
+          {loading && <LoadingState className="py-6" />}
           {datasets.map(d => (
-            <div
+            <SidebarItemDiv
               key={d.id}
+              active={selectedId === d.id}
               onClick={() => selectDataset(d.id)}
-              className={cn(
-                "group flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 transition-colors",
-                selectedId === d.id ? "bg-accent font-medium" : "hover:bg-accent/50 text-muted-foreground"
-              )}
             >
               <FileSpreadsheet className="size-3.5 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
@@ -510,10 +509,10 @@ export function DatasetManager() {
               >
                 <Trash2 className="size-3 text-muted-foreground" />
               </button>
-            </div>
+            </SidebarItemDiv>
           ))}
           {datasets.length === 0 && !loading && (
-            <p className="py-8 text-center text-xs text-muted-foreground">No datasets yet</p>
+            <EmptyState icon={Database} title="No datasets yet" className="py-8" />
           )}
         </div>
 
@@ -526,7 +525,7 @@ export function DatasetManager() {
           <Upload className="mx-auto mb-1 size-4 text-muted-foreground/30" />
           <p className="text-[10px] text-muted-foreground/50">Drop CSV or click</p>
         </div>
-      </div>
+      </Sidebar>
 
       {/* ── Right panel ── */}
       <div
@@ -541,8 +540,7 @@ export function DatasetManager() {
       >
         {!selectedId ? (
           <div className="flex h-full flex-col items-center justify-center gap-3">
-            <Database className="size-10 text-muted-foreground/20" />
-            <p className="text-sm text-muted-foreground">Select a dataset to get started</p>
+            <EmptyState icon={Database} title="Select a dataset" description="Choose a dataset from the list to get started." className="h-auto" />
             <Button variant="outline" size="sm" onClick={() => setImportModal({ open: true, target: null })} className="gap-1.5 text-xs">
               <Upload className="size-3" /> Import CSV
             </Button>
@@ -553,7 +551,7 @@ export function DatasetManager() {
             {/* ── Top bar ── */}
             <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">
               <div>
-                <h1 className="text-sm font-semibold">{selected?.name}</h1>
+                <h1 className="text-xl font-semibold tracking-tight">{selected?.name}</h1>
                 <p className="text-[10px] text-muted-foreground">{totalRows.toLocaleString()} prompts · {headers.length} columns</p>
               </div>
               <div className="flex items-center gap-1.5">
@@ -695,9 +693,7 @@ export function DatasetManager() {
                 <div className="px-5 py-4">
                   {rows.length === 0 ? (
                     <div className="flex flex-col items-center gap-3 py-16 text-center">
-                      <Database className="size-8 text-muted-foreground/20" />
-                      <p className="text-sm text-muted-foreground">No prompts yet</p>
-                      <p className="text-xs text-muted-foreground/60">Import a CSV or add prompts from the Playground</p>
+                      <EmptyState icon={Database} title="No prompts yet" description="Import a CSV or add prompts from the Playground." className="h-auto" />
                       <Button variant="outline" size="sm" onClick={() => setImportModal({ open: true, target: selected ? { id: selected.id, name: selected.name } : null })} className="mt-1 gap-1.5 text-xs">
                         <Upload className="size-3" /> Import CSV
                       </Button>
@@ -951,9 +947,7 @@ export function DatasetManager() {
                   <div className="flex-1 overflow-y-auto px-5 py-4">
                   {!hasResults ? (
                     <div className="flex flex-col items-center gap-3 py-16 text-center">
-                      <FlaskConical className="size-8 text-muted-foreground/20" />
-                      <p className="text-sm text-muted-foreground">No results yet</p>
-                      <p className="text-xs text-muted-foreground/60">Generate responses first, then optionally run evaluations</p>
+                      <EmptyState icon={FlaskConical} title="No results yet" description="Generate responses first, then optionally run evaluations." className="h-auto" />
                       <button
                         onClick={() => setActiveTab("prompts")}
                         className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"

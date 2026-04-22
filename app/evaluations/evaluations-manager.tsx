@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { LoadingState } from "@/components/ui/empty-state";
+import { LoadingState, EmptyState } from "@/components/ui/empty-state";
 import {
   Plus,
   Trash2,
@@ -23,6 +23,7 @@ import { PromptBuilder, parsePromptToConfig, generatePromptMessages } from "@/co
 import { DateRangePicker, getPresetRange, type DateRange } from "@/components/ui/date-range-picker";
 import { refreshBadgeLabels } from "@/components/annotation-badge";
 import { ModelSelector } from "@/components/model-selector";
+import { Sidebar, SidebarHeader, SidebarItem, SidebarItemDiv } from "@/components/ui/sidebar";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -487,32 +488,27 @@ export function EvaluationsManager() {
   return (
     <div className="flex min-h-0 flex-1">
       {/* ── Left: Project list ── */}
-      <div className="flex w-56 shrink-0 flex-col border-r">
+      <Sidebar>
         <div className="px-3 pt-3 pb-1">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Projects</p>
+          <SidebarHeader>Projects</SidebarHeader>
         </div>
         <div className="flex-1 overflow-y-auto px-2">
           {projects.map((p) => (
-            <button
+            <SidebarItem
               key={p.name}
+              active={selectedProject === p.name}
               onClick={() => { setSelectedProject(p.name); setSelectedEval(null); }}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left transition-colors",
-                selectedProject === p.name ? "bg-accent font-medium" : "hover:bg-accent/50 text-muted-foreground",
-              )}
             >
               {p.name}
-            </button>
+            </SidebarItem>
           ))}
         </div>
-      </div>
+      </Sidebar>
 
       {/* ── Center: Active Evals ── */}
-      <div className="flex w-64 shrink-0 flex-col border-r">
+      <Sidebar>
         <div className="flex items-center justify-between px-3 pt-3 pb-1">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Active Evaluations
-          </p>
+          <SidebarHeader>Active Evaluations</SidebarHeader>
         </div>
 
         {selectedProject ? (
@@ -523,12 +519,9 @@ export function EvaluationsManager() {
                 const enabled = isEnabled(name);
                 const hasOverride = projectConfigs.some((c) => c.evalName === name && c.template);
                 return (
-                  <div
+                  <SidebarItemDiv
                     key={name}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md px-2 py-2 transition-colors",
-                      selectedEval === name ? "bg-accent" : "hover:bg-accent/40",
-                    )}
+                    active={selectedEval === name}
                   >
                     {/* Toggle */}
                     <button
@@ -569,7 +562,7 @@ export function EvaluationsManager() {
                       })()}
                       <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
                     </button>
-                  </div>
+                  </SidebarItemDiv>
                 );
               })}
             </div>
@@ -578,18 +571,15 @@ export function EvaluationsManager() {
             {globalPrompts.filter((p) => p.isCustom && !BUILT_IN_EVALS.includes(p.name)).length > 0 && (
               <>
                 <div className="px-3 pt-3 pb-1">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Custom</p>
+                  <SidebarHeader>Custom</SidebarHeader>
                 </div>
                 <div className="px-2">
                   {globalPrompts.filter((p) => p.isCustom && !BUILT_IN_EVALS.includes(p.name)).map((p) => {
                     const enabled = isEnabled(p.name);
                     return (
-                      <div
+                      <SidebarItemDiv
                         key={p.name}
-                        className={cn(
-                          "flex items-center gap-2 rounded-md px-2 py-2 transition-colors",
-                          selectedEval === p.name ? "bg-accent" : "hover:bg-accent/40",
-                        )}
+                        active={selectedEval === p.name}
                       >
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleEval(p.name); }}
@@ -611,7 +601,7 @@ export function EvaluationsManager() {
                           </span>
                           <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
                         </button>
-                      </div>
+                      </SidebarItemDiv>
                     );
                   })}
                 </div>
@@ -635,19 +625,19 @@ export function EvaluationsManager() {
             Select a project
           </div>
         )}
-      </div>
+      </Sidebar>
 
       {/* ── Right: Prompt editor ── */}
       <div className="flex-1 overflow-y-auto">
         {creating && !selectedEval ? (
           /* ── Create new eval form ── */
           <div className="mx-auto max-w-lg p-8">
-            <h1 className="text-xl font-bold mb-1">New Evaluation</h1>
+            <h1 className="text-xl font-semibold tracking-tight mb-1">New Evaluation</h1>
             <p className="text-sm text-muted-foreground mb-6">Create a custom evaluation to run on your agent traces.</p>
 
             <div className="space-y-5">
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Name</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Name</label>
                 <Input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
@@ -659,7 +649,7 @@ export function EvaluationsManager() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Type</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Type</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setNewType("llm_prompt")}
@@ -690,7 +680,7 @@ export function EvaluationsManager() {
 
               {newType === "llm_prompt" && (
                 <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Eval Model</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Eval Model</label>
                   <div className="w-64">
                     <ModelSelector value={newEvalModel} onChange={setNewEvalModel} />
                   </div>
@@ -712,10 +702,7 @@ export function EvaluationsManager() {
             </div>
           </div>
         ) : !selectedEval ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-            <FlaskConical className="size-12 opacity-15" />
-            <p className="text-sm">Select an evaluation to edit its prompt</p>
-          </div>
+          <EmptyState icon={FlaskConical} title="Select an evaluation" description="Choose an evaluation from the list to edit its prompt." className="h-full" />
         ) : (
           <div className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-3xl p-6">
@@ -723,7 +710,7 @@ export function EvaluationsManager() {
             <div className="mb-5">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2.5">
-                  <h1 className="text-lg font-bold tracking-tight">{selectedEval}</h1>
+                  <h1 className="text-xl font-semibold tracking-tight">{selectedEval}</h1>
                   <span className={cn(
                     "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase",
                     editEvalType === "llm_prompt" ? "bg-foreground/8 text-foreground/60" :
@@ -857,7 +844,7 @@ Evaluate and respond with JSON only: {{"label": "pass" or "fail", "score": 0.0-1
             ) : (
               <div className="mb-5">
                 <div className="mb-4">
-                  <span className="text-xs font-semibold uppercase text-muted-foreground">Eval Model</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Eval Model</span>
                   <div className="mt-1 w-64">
                     <ModelSelector value={editModel} onChange={(m) => { setEditModel(m); setDirty(true); }} />
                   </div>
@@ -875,8 +862,8 @@ Evaluate and respond with JSON only: {{"label": "pass" or "fail", "score": 0.0-1
             {/* Test */}
             <div className="rounded-lg border p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                  <Play className="size-3.5" /> Test
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                  <Play className="size-3" /> Test
                 </h3>
                 <Button size="sm" variant="outline" onClick={handleTest} disabled={testing || !editTemplate} className="gap-1.5 text-xs">
                   {testing ? "Running..." : "Run"}
