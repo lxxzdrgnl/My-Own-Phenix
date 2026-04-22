@@ -23,7 +23,8 @@ export const Thread: FC<{
   showWelcome?: boolean;
   historyMessages?: HistoryMessage[];
   isFadingOut?: boolean;
-}> = ({ showWelcome = true, historyMessages = [], isFadingOut = false }) => {
+  project?: string;
+}> = ({ showWelcome = true, historyMessages = [], isFadingOut = false, project = "default" }) => {
   return (
     <ThreadPrimitive.Root
       className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
@@ -42,7 +43,7 @@ export const Thread: FC<{
         >
           {showWelcome && historyMessages.length === 0 && (
             <AssistantIf condition={({ thread }) => thread.isEmpty}>
-              <ThreadWelcome />
+              <ThreadWelcome project={project} />
             </AssistantIf>
           )}
 

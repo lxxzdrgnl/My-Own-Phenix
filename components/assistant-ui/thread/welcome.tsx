@@ -23,24 +23,26 @@ export const ThreadScrollToBottom: FC = () => {
   );
 };
 
-function useChatSuggestions() {
+function useChatSuggestions(project: string) {
   const [suggestions, setSuggestions] = useState<ChatSuggestion[]>(DEFAULT_CHAT_SUGGESTIONS);
 
   const load = useCallback(async () => {
     try {
       const res = await apiFetch("/api/settings");
       const data = await res.json();
-      setSuggestions(parseChatSuggestions(data.chatSuggestions));
+      setSuggestions(parseChatSuggestions(data[`chatSuggestions:${project}`]));
     } catch {}
-  }, []);
+  }, [project]);
 
   useEffect(() => { load(); }, [load]);
 
   return suggestions;
 }
 
-const ThreadSuggestions: FC = () => {
-  const suggestions = useChatSuggestions();
+const ThreadSuggestions: FC<{ project: string }> = ({ project }) => {
+  const suggestions = useChatSuggestions(project);
+
+  if (suggestions.length === 0) return null;
 
   return (
     <div className="aui-thread-welcome-suggestions grid w-full @md:grid-cols-2 gap-2 pb-4">
@@ -70,7 +72,7 @@ const ThreadSuggestions: FC = () => {
   );
 };
 
-export const ThreadWelcome: FC = () => {
+export const ThreadWelcome: FC<{ project?: string }> = ({ project = "default" }) => {
   return (
     <div className="aui-thread-welcome-root mx-auto my-auto flex w-full max-w-(--thread-max-width) grow flex-col">
       <div className="aui-thread-welcome-center flex w-full grow flex-col items-center justify-center">
@@ -79,11 +81,11 @@ export const ThreadWelcome: FC = () => {
             Hello there!
           </h1>
           <p className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in text-muted-foreground text-xl delay-75 duration-200">
-            Ask me anything about legal matters.
+            Ask me anything.
           </p>
         </div>
       </div>
-      <ThreadSuggestions />
+      <ThreadSuggestions project={project} />
     </div>
   );
 };

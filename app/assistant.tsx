@@ -392,7 +392,7 @@ export function Assistant({ project = "default", projects = [], onProjectChange,
 
           {/* Main chat area */}
           <div className="flex-1 min-h-0">
-            <Thread showWelcome={history.length === 0} historyMessages={history} isFadingOut={isFadingOut} />
+            <Thread showWelcome={history.length === 0} historyMessages={history} isFadingOut={isFadingOut} project={project} />
           </div>
         </div>
       </div>
