@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { callLlm } from "@/lib/llm-providers";
 
 const PHOENIX = process.env.PHOENIX_URL ?? "http://localhost:6006";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
 
 // ── Helpers ──
 
@@ -39,16 +39,15 @@ async function phoenixUploadAnnotation(spanId: string, name: string, kind: strin
   });
 }
 
-async function openaiEval(messages: { role: string; content: string }[]): Promise<Record<string, unknown>> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: JSON.stringify({ model: "gpt-4o-mini", messages, temperature: 0, response_format: { type: "json_object" } }),
-    signal: AbortSignal.timeout(30000),
-  });
-  const data = await res.json();
+async function llmEval(messages: { role: string; content: string }[], model: string): Promise<Record<string, unknown>> {
   try {
-    return JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+    const result = await callLlm({
+      model,
+      messages,
+      temperature: 0,
+      responseFormat: "json",
+    });
+    return JSON.parse(result.content || "{}");
   } catch {
     return {};
   }
@@ -129,10 +128,6 @@ export async function POST(req: NextRequest) {
   if (!projectId || !evalName || !startDate || !endDate) {
     return NextResponse.json({ error: "projectId, evalName, startDate, endDate required" }, { status: 400 });
   }
-  if (!OPENAI_API_KEY) {
-    return NextResponse.json({ error: "OPENAI_API_KEY not configured" }, { status: 500 });
-  }
-
   // Load eval definition
   const evalPrompt = await prisma.evalPrompt.findFirst({
     where: { name: evalName, OR: [{ projectId: null }, { projectId: "" }, { projectId }] },
@@ -219,7 +214,7 @@ export async function POST(req: NextRequest) {
       if (system) messages.push({ role: "system", content: system });
       messages.push({ role: "user", content: user });
 
-      const r = await openaiEval(messages);
+      const r = await llmEval(messages, evalPrompt.model ?? "gpt-4o-mini");
       if (r && r.label) {
         const label = String(r.label);
         let score: number;

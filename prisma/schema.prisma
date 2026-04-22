@@ -97,6 +97,7 @@ model EvalPrompt {
   ruleConfig  String   @default("{}")         // JSON rule config for code_rule type
   badgeLabel  String   @default("")           // short name for annotation badge (e.g. "HAL", "CIT")
   isCustom    Boolean  @default(false)
+  model      String   @default("gpt-4o-mini")
   updatedAt  DateTime @updatedAt
 
   @@unique([name, projectId])
@@ -135,6 +136,20 @@ model AgentTemplate {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   configs     AgentConfig[]
+}
+
+model AppSettings {
+  key   String @id     // e.g. "defaultEvalModel"
+  value String
+}
+
+model LlmProvider {
+  id        String   @id @default(cuid())
+  provider  String   @unique  // "openai" | "anthropic" | "google" | "xai"
+  apiKey    String             // encrypted
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Dataset {

@@ -16,7 +16,6 @@ interface ModelFamily {
 interface Provider {
   name: string;
   icon: "openai" | "anthropic" | "google" | "xai";
-  disabled?: boolean;
   families: ModelFamily[];
 }
 
@@ -85,7 +84,6 @@ const PROVIDERS: Provider[] = [
   {
     name: "Anthropic",
     icon: "anthropic",
-    disabled: true,
     families: [
       {
         label: "Claude",
@@ -100,7 +98,6 @@ const PROVIDERS: Provider[] = [
   {
     name: "Google",
     icon: "google",
-    disabled: true,
     families: [
       {
         label: "Gemini",
@@ -115,7 +112,6 @@ const PROVIDERS: Provider[] = [
   {
     name: "xAI",
     icon: "xai",
-    disabled: true,
     families: [
       {
         label: "Grok",
@@ -176,6 +172,20 @@ export function ModelSelector({
   const [expandedFamily, setExpandedFamily] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [activeProviders, setActiveProviders] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch("/api/providers")
+      .then((r) => r.json())
+      .then((data) => {
+        const active = new Set<string>();
+        for (const p of data.providers ?? []) {
+          if (p.isActive) active.add(p.provider);
+        }
+        setActiveProviders(active);
+      })
+      .catch(() => {});
+  }, []);
 
   // Find which provider the current value belongs to
   const currentProvider = PROVIDERS.find((p) =>
@@ -256,14 +266,14 @@ export function ModelSelector({
                     {matches.map((m) => (
                       <button
                         key={m.id}
-                        disabled={provider.disabled}
+                        disabled={!activeProviders.has(provider.name.toLowerCase())}
                         onClick={() => {
                           onChange(m.id);
                           setOpen(false);
                           setSearch("");
                         }}
                         className={`flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-sm transition-colors
-                          ${provider.disabled
+                          ${!activeProviders.has(provider.name.toLowerCase())
                             ? "cursor-not-allowed opacity-30"
                             : m.id === value
                               ? "bg-foreground/8 font-medium"
@@ -286,12 +296,12 @@ export function ModelSelector({
                   {/* Provider row */}
                   <button
                     onClick={() => {
-                      if (provider.disabled) return;
+                      if (!activeProviders.has(provider.name.toLowerCase())) return;
                       setExpandedProvider(isProviderExpanded ? null : provider.name);
                       setExpandedFamily(null);
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors
-                      ${provider.disabled ? "cursor-not-allowed opacity-30" : "hover:bg-muted"}`}
+                      ${!activeProviders.has(provider.name.toLowerCase()) ? "cursor-not-allowed opacity-30" : "hover:bg-muted"}`}
                   >
                     <ChevronRight
                       className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${isProviderExpanded ? "rotate-90" : ""}`}
