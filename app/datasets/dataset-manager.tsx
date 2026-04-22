@@ -59,7 +59,8 @@ export function DatasetManager() {
   const [dragOver, setDragOver] = useState(false);
 
   const [agentConfigs, setAgentConfigs] = useState<AgentConfigOption[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState("llm:gpt-4o-mini");
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [providerModels, setProviderModels] = useState<{ provider: string; models: string[] }[]>([]);
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
 
@@ -105,6 +106,32 @@ export function DatasetManager() {
   useEffect(() => {
     fetch("/api/agent-config").then(r => r.json()).then(d => setAgentConfigs(d.configs ?? [])).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch("/api/providers")
+      .then((r) => r.json())
+      .then((data) => {
+        const models: { provider: string; models: string[] }[] = [];
+        for (const p of data.providers ?? []) {
+          if (!p.isActive) continue;
+          const modelMap: Record<string, string[]> = {
+            openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1", "gpt-4.1-mini"],
+            anthropic: ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+            google: ["gemini-2.5-flash", "gemini-2.0-flash"],
+            xai: ["grok-3-mini", "grok-3"],
+          };
+          models.push({ provider: p.provider, models: modelMap[p.provider] ?? [] });
+        }
+        setProviderModels(models);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedAgent && providerModels.length > 0 && providerModels[0].models.length > 0) {
+      setSelectedAgent(`llm:${providerModels[0].models[0]}`);
+    }
+  }, [providerModels, selectedAgent]);
 
   const loadEvals = useCallback(async () => {
     try {
@@ -559,13 +586,22 @@ export function DatasetManager() {
                     onChange={e => setSelectedAgent(e.target.value)}
                     className="h-8 w-52 rounded-md border bg-background px-2 text-xs"
                   >
-                    <option value="llm:gpt-4o-mini">Direct LLM · gpt-4o-mini</option>
-                    <option value="llm:gpt-4o">Direct LLM · gpt-4o</option>
-                    {agentConfigs.map(c => (
-                      <option key={c.id} value={`agent:${c.id}`}>
-                        {c.template?.name || c.alias?.trim() || c.project} ({c.agentType})
-                      </option>
-                    ))}
+                    <optgroup label="Direct LLM">
+                      {providerModels.map(({ provider, models }) =>
+                        models.map((m) => (
+                          <option key={m} value={`llm:${m}`}>
+                            {provider.charAt(0).toUpperCase() + provider.slice(1)} · {m}
+                          </option>
+                        ))
+                      )}
+                    </optgroup>
+                    <optgroup label="Agents">
+                      {agentConfigs.map(c => (
+                        <option key={c.id} value={`agent:${c.id}`}>
+                          {c.template?.name || c.alias?.trim() || c.project} ({c.agentType})
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                   {generating ? (
                     <Button onClick={handleCancel} variant="outline" className="h-8 gap-1.5 text-xs">

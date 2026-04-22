@@ -2,12 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  Plus,
-  Pencil,
-  Trash2,
-  ChevronRight,
-  ChevronDown,
-  Bot,
+  Plus, Pencil, Trash2, ChevronRight, ChevronDown, Bot,
 } from "lucide-react";
 import { Modal, ModalHeader, ModalBody } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
@@ -48,150 +43,139 @@ export function AgentsSection() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   async function handleDelete(agent: AgentEntry) {
     if (!confirm(`Delete agent "${agent.name}" and disconnect all projects using it?`)) return;
-    try {
-      await fetch(`/api/agent-templates?id=${agent.id}`, { method: "DELETE" });
-      await load();
-    } catch {}
+    await fetch(`/api/agent-templates?id=${agent.id}`, { method: "DELETE" });
+    await load();
   }
 
   function parseEvalPrompts(raw: string): Record<string, string> {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
+    try { return JSON.parse(raw); } catch { return {}; }
   }
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold">Agents</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Register and manage agents connected to your projects.
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold tracking-tight">Agents</h2>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Register and manage agent templates for projects and dataset runs.
         </p>
       </div>
 
       {loading && <LoadingState />}
 
       {!loading && (
-        <div className="space-y-3">
-          <button
-            onClick={() => {
-              setEditTarget(null);
-              setShowForm(true);
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed py-3 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-          >
-            <Plus className="h-4 w-4" />
-            Register New Agent
-          </button>
+        <div className="space-y-8">
+          {/* Agent list */}
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
+                Templates
+              </h3>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                {agents.length}
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
 
-          {agents.length === 0 && (
-            <EmptyState
-              icon={Bot}
-              title="No agents registered"
-              description="Register an agent to connect it to projects."
-            />
-          )}
+            <div className="space-y-2">
+              {agents.map((a) => {
+                const isExpanded = expanded === a.id;
+                const prompts = parseEvalPrompts(a.evalPrompts);
+                const promptKeys = Object.keys(prompts).filter((k) => prompts[k]);
 
-          {agents.map((a) => {
-            const isExpanded = expanded === a.id;
-            const prompts = parseEvalPrompts(a.evalPrompts);
-            const promptKeys = Object.keys(prompts).filter((k) => prompts[k]);
-
-            return (
-              <div key={a.id} className="rounded-lg border">
-                {/* Header row */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <button
-                    onClick={() => setExpanded(isExpanded ? null : a.id)}
-                    className="rounded p-0.5 hover:bg-muted"
-                  >
-                    {isExpanded ? (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{a.name}</p>
-                    {a.description && (
-                      <p className="truncate text-xs text-muted-foreground">{a.description}</p>
-                    )}
-                  </div>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                    {a.agentType}
-                  </span>
-                  {promptKeys.length > 0 && (
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                      {promptKeys.length} eval prompts
-                    </span>
-                  )}
-                  <button
-                    onClick={() => {
-                      setEditTarget(a);
-                      setShowForm(true);
-                    }}
-                    className="rounded p-1.5 transition-colors hover:bg-muted"
-                    title="Edit"
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(a)}
-                    className="rounded p-1.5 transition-colors hover:bg-muted"
-                    title="Delete"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </div>
-
-                {/* Expanded detail */}
-                {isExpanded && (
-                  <div className="border-t px-4 py-3 space-y-3">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-xs font-semibold uppercase text-muted-foreground">
-                          Endpoint
-                        </span>
-                        <p className="mt-0.5 font-mono text-xs break-all">{a.endpoint}</p>
+                return (
+                  <div key={a.id} className="rounded-lg border transition-colors hover:border-foreground/15">
+                    {/* Header row */}
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <button
+                        onClick={() => setExpanded(isExpanded ? null : a.id)}
+                        className="rounded p-0.5 hover:bg-muted"
+                      >
+                        {isExpanded
+                          ? <ChevronDown className="h-4 w-4 text-muted-foreground/50" />
+                          : <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                        }
+                      </button>
+                      <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-[10px] font-bold uppercase text-muted-foreground">
+                        {a.name.slice(0, 2)}
                       </div>
-                      <div>
-                        <span className="text-xs font-semibold uppercase text-muted-foreground">
-                          Assistant ID
-                        </span>
-                        <p className="mt-0.5 font-mono text-xs">{a.assistantId}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{a.name}</p>
+                        {a.description && (
+                          <p className="truncate text-[11px] text-muted-foreground/60">{a.description}</p>
+                        )}
                       </div>
+                      <span className="rounded-full bg-foreground/8 px-2 py-0.5 text-[10px] font-semibold text-foreground/60">
+                        {a.agentType}
+                      </span>
+                      {promptKeys.length > 0 && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground/60">
+                          {promptKeys.length} evals
+                        </span>
+                      )}
+                      <button
+                        onClick={() => { setEditTarget(a); setShowForm(true); }}
+                        className="rounded p-1.5 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(a)}
+                        className="rounded p-1.5 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
 
-                    {promptKeys.length > 0 && (
-                      <div>
-                        <span className="text-xs font-semibold uppercase text-muted-foreground">
-                          Eval Prompts
-                        </span>
-                        {promptKeys.map((key) => (
-                          <div key={key} className="mt-2">
-                            <span className="mb-1 inline-block rounded bg-muted px-1.5 py-0.5 text-xs font-semibold uppercase">
-                              {key}
-                            </span>
-                            <div className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md border bg-muted/20 p-3 text-xs leading-relaxed">
-                              {prompts[key]}
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div className="border-t bg-muted/5 px-4 py-3 space-y-3">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Endpoint</p>
+                            <p className="mt-1 font-mono text-xs text-foreground/80 break-all">{a.endpoint}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Assistant ID</p>
+                            <p className="mt-1 font-mono text-xs text-foreground/80">{a.assistantId}</p>
+                          </div>
+                        </div>
+
+                        {promptKeys.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Eval Prompts</p>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {promptKeys.map((key) => (
+                                <span key={key} className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                                  {key}
+                                </span>
+                              ))}
                             </div>
                           </div>
-                        ))}
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+
+              {agents.length === 0 && (
+                <EmptyState icon={Bot} title="No agents registered" description="Register an agent template to connect it to projects." />
+              )}
+
+              <button
+                onClick={() => { setEditTarget(null); setShowForm(true); }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-3 text-sm text-muted-foreground/60 transition-colors hover:border-foreground/20 hover:text-foreground"
+              >
+                <Plus className="h-4 w-4" />
+                Register New Agent
+              </button>
+            </div>
+          </section>
         </div>
       )}
 
@@ -199,29 +183,22 @@ export function AgentsSection() {
         <AgentFormModal
           mode={editTarget ? "edit" : "create"}
           initial={editTarget}
-          onClose={() => {
-            setShowForm(false);
-            setEditTarget(null);
-          }}
-          onSave={() => {
-            setShowForm(false);
-            setEditTarget(null);
-            load();
-          }}
+          onClose={() => { setShowForm(false); setEditTarget(null); }}
+          onSave={() => { setShowForm(false); setEditTarget(null); load(); }}
         />
       )}
     </div>
   );
 }
 
-interface AgentFormModalProps {
+// ── Agent Form Modal ──
+
+function AgentFormModal({ mode, initial, onClose, onSave }: {
   mode: "create" | "edit";
   initial?: AgentEntry | null;
   onClose: () => void;
   onSave: () => void;
-}
-
-function AgentFormModal({ mode, initial, onClose, onSave }: AgentFormModalProps) {
+}) {
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [agentType, setAgentType] = useState(initial?.agentType ?? "langgraph");
@@ -245,14 +222,8 @@ function AgentFormModal({ mode, initial, onClose, onSave }: AgentFormModalProps)
   }, [initial]);
 
   async function handleSave() {
-    if (!name.trim()) {
-      setError("Name is required.");
-      return;
-    }
-    if (!endpoint.trim()) {
-      setError("Endpoint is required.");
-      return;
-    }
+    if (!name.trim()) { setError("Name is required."); return; }
+    if (!endpoint.trim()) { setError("Endpoint is required."); return; }
     setError(undefined);
     setSaving(true);
 
@@ -263,12 +234,8 @@ function AgentFormModal({ mode, initial, onClose, onSave }: AgentFormModalProps)
 
     try {
       const body: Record<string, unknown> = {
-        name: name.trim(),
-        description: description.trim(),
-        agentType,
-        endpoint: endpoint.trim(),
-        assistantId: assistantId.trim(),
-        evalPrompts,
+        name: name.trim(), description: description.trim(), agentType,
+        endpoint: endpoint.trim(), assistantId: assistantId.trim(), evalPrompts,
       };
       if (mode === "edit" && initial?.id) body.id = initial.id;
 
@@ -277,17 +244,9 @@ function AgentFormModal({ mode, initial, onClose, onSave }: AgentFormModalProps)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        const d = await res.json();
-        setError(d.error ?? "Failed to save.");
-        return;
-      }
+      if (!res.ok) { setError((await res.json()).error ?? "Failed to save."); return; }
       onSave();
-    } catch {
-      setError("Network error.");
-    } finally {
-      setSaving(false);
-    }
+    } catch { setError("Network error."); } finally { setSaving(false); }
   }
 
   return (
@@ -299,101 +258,42 @@ function AgentFormModal({ mode, initial, onClose, onSave }: AgentFormModalProps)
         <div className="space-y-4">
           <div>
             <FormLabel>Agent Name</FormLabel>
-            <Input
-              placeholder="e.g. Legal RAG, Dexter, Custom Agent"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={mode === "edit"}
-            />
+            <Input placeholder="e.g. Legal RAG, Dexter" value={name} onChange={(e) => setName(e.target.value)} disabled={mode === "edit"} />
           </div>
-
           <div>
             <FormLabel>Description</FormLabel>
-            <Input
-              placeholder="Short description of this agent"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+            <Input placeholder="Short description" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <FormLabel>Agent Type</FormLabel>
-              <select
-                value={agentType}
-                onChange={(e) => setAgentType(e.target.value)}
-                className="h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-              >
-                {AGENT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
+              <select value={agentType} onChange={(e) => setAgentType(e.target.value)} className="h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring">
+                {AGENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div>
               <FormLabel>Assistant ID</FormLabel>
-              <Input
-                placeholder="agent"
-                value={assistantId}
-                onChange={(e) => setAssistantId(e.target.value)}
-              />
+              <Input placeholder="agent" value={assistantId} onChange={(e) => setAssistantId(e.target.value)} />
             </div>
           </div>
-
           <div>
             <FormLabel>Endpoint URL</FormLabel>
-            <Input
-              placeholder="http://localhost:2024"
-              value={endpoint}
-              onChange={(e) => setEndpoint(e.target.value)}
-            />
+            <Input placeholder="http://localhost:2024" value={endpoint} onChange={(e) => setEndpoint(e.target.value)} />
           </div>
-
           <div className="border-t pt-4">
             <p className="text-sm font-medium mb-2">Eval Prompts</p>
             <p className="text-xs text-muted-foreground mb-3">
-              Custom eval prompts for this agent. Leave blank to use defaults.
-              Use {"{{context}}"}, {"{{response}}"}, {"{{query}}"} as placeholders.
+              Custom eval prompts. Leave blank for defaults. Use {"{{context}}"}, {"{{response}}"}, {"{{query}}"}.
             </p>
-
             <div className="space-y-3">
-              <div>
-                <FormLabel>Hallucination</FormLabel>
-                <Textarea
-                  rows={3}
-                  placeholder="Default prompt"
-                  value={evalHallucination}
-                  onChange={(e) => setEvalHallucination(e.target.value)}
-                />
-              </div>
-              <div>
-                <FormLabel>Citation</FormLabel>
-                <Textarea
-                  rows={3}
-                  placeholder="Default prompt"
-                  value={evalCitation}
-                  onChange={(e) => setEvalCitation(e.target.value)}
-                />
-              </div>
-              <div>
-                <FormLabel>Tool Calling</FormLabel>
-                <Textarea
-                  rows={3}
-                  placeholder="Default prompt"
-                  value={evalToolCalling}
-                  onChange={(e) => setEvalToolCalling(e.target.value)}
-                />
-              </div>
+              <div><FormLabel>Hallucination</FormLabel><Textarea rows={3} placeholder="Default" value={evalHallucination} onChange={(e) => setEvalHallucination(e.target.value)} /></div>
+              <div><FormLabel>Citation</FormLabel><Textarea rows={3} placeholder="Default" value={evalCitation} onChange={(e) => setEvalCitation(e.target.value)} /></div>
+              <div><FormLabel>Tool Calling</FormLabel><Textarea rows={3} placeholder="Default" value={evalToolCalling} onChange={(e) => setEvalToolCalling(e.target.value)} /></div>
             </div>
           </div>
-
           {error && <FormError message={error} />}
-
           <div className="flex justify-end gap-2 pt-2 border-t">
-            <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-              Cancel
-            </Button>
+            <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
             <Button size="sm" onClick={handleSave} disabled={saving}>
               {saving ? "Saving..." : mode === "create" ? "Register" : "Save"}
             </Button>

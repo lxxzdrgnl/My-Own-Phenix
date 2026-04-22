@@ -34,7 +34,6 @@ logger = logging.getLogger("eval_worker")
 POLL_INTERVAL = int(os.getenv("EVAL_POLL_INTERVAL", "15"))
 PHOENIX_URL = os.getenv("PHOENIX_URL", "http://localhost:6006").rstrip("/")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://localhost:3000").rstrip("/")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 MAX_CACHE = 5000
 MAX_LLM_EVALS_PER_TRACE = 5
 
@@ -45,6 +44,32 @@ BANNED_RE = re.compile("|".join(re.escape(w) for w in BANNED_WORDS), re.IGNORECA
 
 _reeval_raw = os.getenv("REEVAL_ANNOTATIONS", "")
 REEVAL_ANNOTATIONS = {a.strip() for a in _reeval_raw.split(",") if a.strip()}
+
+
+# ── API key helpers ───────────────────────────────────────────────────────
+
+def fetch_provider_key(provider: str) -> str:
+    """Fetch decrypted API key from dashboard."""
+    try:
+        resp = httpx.get(f"{DASHBOARD_URL}/api/providers?decrypt=true", timeout=10)
+        for p in resp.json().get("providers", []):
+            if p["provider"] == provider and p.get("isActive", False):
+                return p["apiKey"]
+    except Exception as e:
+        logger.warning("Failed to fetch %s key from dashboard: %s", provider, e)
+    # Fallback to env var
+    return os.environ.get("OPENAI_API_KEY", "")
+
+
+_openai_key_cache: str | None = None
+
+
+def get_openai_key() -> str:
+    global _openai_key_cache
+    if _openai_key_cache is None:
+        _openai_key_cache = fetch_provider_key("openai")
+    return _openai_key_cache
+
 
 # ── Phoenix API helpers ───────────────────────────────────────────────────
 
@@ -473,6 +498,42 @@ def _eval_code_rule(rule_config: dict, query: str, response: str, context: str, 
     return {"label": clean_result.get("label", "clean"), "score": float(clean_result.get("score", 0.0)), "explanation": ""}
 
 
+# ── Lazy OpenAI client / evaluator initialization ────────────────────────
+
+_openai_client = None
+_openai_model = None
+_qa_eval = None
+_relevance_eval = None
+
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=get_openai_key())
+    return _openai_client
+
+
+def get_openai_model():
+    global _openai_model
+    if _openai_model is None:
+        _openai_model = OpenAIModel(model="gpt-4o-mini", api_key=get_openai_key())
+    return _openai_model
+
+
+def get_qa_eval():
+    global _qa_eval
+    if _qa_eval is None:
+        _qa_eval = QAEvaluator(get_openai_model())
+    return _qa_eval
+
+
+def get_relevance_eval():
+    global _relevance_eval
+    if _relevance_eval is None:
+        _relevance_eval = RelevanceEvaluator(get_openai_model())
+    return _relevance_eval
+
+
 # ── Evaluators ────────────────────────────────────────────────────────────
 
 PASS_LABELS = {"pass", "true", "yes", "correct", "factual", "faithful", "appropriate", "clean", "relevant"}
@@ -480,7 +541,7 @@ PASS_LABELS = {"pass", "true", "yes", "correct", "factual", "faithful", "appropr
 
 def _openai_eval(prompt_text: str, system_msg: str | None = None) -> dict:
     try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        client = get_openai_client()
         messages = []
         if system_msg:
             messages.append({"role": "system", "content": system_msg})
@@ -581,7 +642,7 @@ ALL_ANNOTATIONS = TRACE_EVALS | SPAN_LLM_EVALS | SPAN_RETRIEVER_EVALS
 
 def _run_trace_evals(
     root_id: str, query: str, response: str, context: str,
-    missing: set[str], qa_eval: QAEvaluator, project: str,
+    missing: set[str], project: str,
     root_span_data: dict | None = None,
 ) -> None:
     """Trace-level evals on root span."""
@@ -593,7 +654,7 @@ def _run_trace_evals(
         try:
             ref = context or response  # Use context if available, else self-reference
             df = pd.DataFrame([{"context.span_id": root_id, "input": query, "output": response, "reference": ref}]).set_index("context.span_id")
-            (result,) = run_evals(evaluators=[qa_eval], dataframe=df[["input", "output", "reference"]], provide_explanation=True, concurrency=1)
+            (result,) = run_evals(evaluators=[get_qa_eval()], dataframe=df[["input", "output", "reference"]], provide_explanation=True, concurrency=1)
             if result is not None and not result.empty:
                 row = result.iloc[0]
                 phoenix_upload_annotation(root_id, "qa_correctness", "LLM",
@@ -653,7 +714,7 @@ def _run_llm_span_evals(
 
 def _run_retriever_span_evals(
     span_id: str, query: str, docs_output: str,
-    missing: set[str], relevance_eval: RelevanceEvaluator, project: str,
+    missing: set[str], project: str,
 ) -> None:
     """Span-level evals on RETRIEVER spans."""
     if "rag_relevance" not in missing or not query or not docs_output:
@@ -664,7 +725,7 @@ def _run_retriever_span_evals(
             docs = [docs_output[:800]]
         rows = [{"idx": f"d{i}", "input": query, "reference": d[:800]} for i, d in enumerate(docs)]
         df = pd.DataFrame(rows).set_index("idx")
-        (result,) = run_evals(evaluators=[relevance_eval], dataframe=df[["input", "reference"]], provide_explanation=False, concurrency=3)
+        (result,) = run_evals(evaluators=[get_relevance_eval()], dataframe=df[["input", "reference"]], provide_explanation=False, concurrency=3)
         if result is not None and not result.empty:
             avg = float(result["score"].mean())
             n = int(result["score"].sum())
@@ -676,7 +737,6 @@ def _run_retriever_span_evals(
 
 def process_trace(
     trace_spans: list[dict], project: str,
-    qa_eval: QAEvaluator, relevance_eval: RelevanceEvaluator,
 ) -> int:
     """Process one trace (group of spans with same trace_id). Returns eval count."""
     root = _find_root(trace_spans)
@@ -720,7 +780,7 @@ def process_trace(
 
     if root_missing:
         logger.info("[%s] Trace eval %s (%d missing: %s)", project, root_id[:8], len(root_missing), ", ".join(root_missing))
-        _run_trace_evals(root_id, query, response, trace_context, root_missing, qa_eval, project, root)
+        _run_trace_evals(root_id, query, response, trace_context, root_missing, project, root)
         eval_count += 1
 
     # ── Level 2: LLM span evals ──
@@ -771,7 +831,7 @@ def process_trace(
 
         if ret_missing and ret_output:
             logger.info("[%s]   RETRIEVER eval %s", project, sid[:8])
-            _run_retriever_span_evals(sid, ret_query, _extract_text(ret_output), ret_missing, relevance_eval, project)
+            _run_retriever_span_evals(sid, ret_query, _extract_text(ret_output), ret_missing, project)
             eval_count += 1
 
     return eval_count
@@ -780,10 +840,6 @@ def process_trace(
 # ── Main loop ─────────────────────────────────────────────────────────────
 
 def main() -> None:
-    model = OpenAIModel(model="gpt-4o-mini", api_key=OPENAI_API_KEY)
-    qa_eval = QAEvaluator(model)
-    relevance_eval = RelevanceEvaluator(model)
-
     evaluated_traces: dict[str, set[str]] = {}  # project → set of trace_ids
     caches: dict[str, deque] = {}
     lookback = timedelta(days=30) if REEVAL_ANNOTATIONS else timedelta(minutes=5)
@@ -823,7 +879,7 @@ def main() -> None:
                     if not root or not root.get("end_time"):
                         continue
 
-                    count = process_trace(trace_spans, project, qa_eval, relevance_eval)
+                    count = process_trace(trace_spans, project)
                     if count > 0:
                         new_count += count
 
@@ -846,7 +902,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    if not OPENAI_API_KEY:
-        logger.error("OPENAI_API_KEY is required")
-        exit(1)
     main()

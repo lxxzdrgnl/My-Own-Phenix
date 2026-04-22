@@ -22,6 +22,7 @@ import { RuleBuilder, DEFAULT_RULE_CONFIG, type RuleConfig } from "@/components/
 import { PromptBuilder, parsePromptToConfig, generatePromptMessages } from "@/components/prompt-builder";
 import { DateRangePicker, getPresetRange, type DateRange } from "@/components/ui/date-range-picker";
 import { refreshBadgeLabels } from "@/components/annotation-badge";
+import { ModelSelector } from "@/components/model-selector";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ interface EvalPrompt {
   ruleConfig: string; // JSON
   badgeLabel: string;
   isCustom: boolean;
+  model: string;
 }
 
 interface ProjectEvalConfig {
@@ -115,6 +117,7 @@ export function EvaluationsManager() {
   const [editEvalType, setEditEvalType] = useState<string>("llm_prompt");
   const [editRuleConfig, setEditRuleConfig] = useState<RuleConfig>(DEFAULT_RULE_CONFIG);
   const [editBadgeLabel, setEditBadgeLabel] = useState("");
+  const [editModel, setEditModel] = useState("gpt-4o-mini");
   const [isProjectOverride, setIsProjectOverride] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -123,6 +126,8 @@ export function EvaluationsManager() {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<string>("llm_prompt");
+  const [defaultEvalModel, setDefaultEvalModel] = useState("gpt-4o-mini");
+  const [newEvalModel, setNewEvalModel] = useState("gpt-4o-mini");
 
   // Test & Backfill tabs
   const [testTab, setTestTab] = useState<"test" | "backfill">("test");
@@ -177,6 +182,14 @@ export function EvaluationsManager() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => { if (selectedProject) loadProjectConfig(selectedProject); }, [selectedProject, loadProjectConfig]);
+  useEffect(() => {
+    fetch("/api/settings").then((r) => r.json()).then((data) => {
+      if (data.defaultEvalModel) {
+        setDefaultEvalModel(data.defaultEvalModel);
+        setNewEvalModel(data.defaultEvalModel);
+      }
+    }).catch(() => {});
+  }, []);
 
   // ── Eval selection ──
 
@@ -192,6 +205,7 @@ export function EvaluationsManager() {
     const evalType = globalCustom?.evalType ?? BUILT_IN_TYPES[name] ?? "llm_prompt";
     setEditEvalType(evalType);
     setEditBadgeLabel(globalCustom?.badgeLabel ?? "");
+    setEditModel(globalCustom?.model || defaultEvalModel);
 
     // Load rule config
     if (evalType === "code_rule") {
@@ -266,6 +280,7 @@ export function EvaluationsManager() {
           template: editTemplate,
           ruleConfig: editEvalType === "code_rule" ? editRuleConfig : undefined,
           badgeLabel: editBadgeLabel,
+          model: editModel,
           isCustom,
         }),
       });
@@ -390,6 +405,7 @@ export function EvaluationsManager() {
           evalType: newType,
           template: newType === "llm_prompt" ? NEW_EVAL_TEMPLATE : "",
           ruleConfig: newType === "code_rule" ? DEFAULT_RULE_CONFIG : undefined,
+          model: newEvalModel,
           isCustom: true,
         }),
       });
@@ -401,12 +417,14 @@ export function EvaluationsManager() {
       });
       setNewName("");
       setNewType("llm_prompt");
+      setNewEvalModel(defaultEvalModel);
       setCreating(false);
       await loadProjectConfig(selectedProject);
       setSelectedEval(name);
       setEditEvalType(newType);
       setEditTemplate(newType === "llm_prompt" ? NEW_EVAL_TEMPLATE : "");
       setEditRuleConfig(newType === "code_rule" ? DEFAULT_RULE_CONFIG : DEFAULT_RULE_CONFIG);
+      setEditModel(newEvalModel);
       setIsProjectOverride(false);
       setDirty(false);
       setTestResult(null);
@@ -670,6 +688,15 @@ export function EvaluationsManager() {
                 </div>
               </div>
 
+              {newType === "llm_prompt" && (
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Eval Model</label>
+                  <div className="w-64">
+                    <ModelSelector value={newEvalModel} onChange={setNewEvalModel} />
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <Button
                   onClick={handleCreate}
@@ -829,6 +856,12 @@ Evaluate and respond with JSON only: {{"label": "pass" or "fail", "score": 0.0-1
               </div>
             ) : (
               <div className="mb-5">
+                <div className="mb-4">
+                  <span className="text-xs font-semibold uppercase text-muted-foreground">Eval Model</span>
+                  <div className="mt-1 w-64">
+                    <ModelSelector value={editModel} onChange={(m) => { setEditModel(m); setDirty(true); }} />
+                  </div>
+                </div>
                 <PromptBuilder
                   template={editTemplate}
                   evalName={selectedEval}

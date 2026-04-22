@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Plus, Trash2, Pencil, CheckCircle, XCircle, Loader2, Key } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FormLabel, FormError } from "@/components/ui/form-field";
-import { LoadingState, EmptyState } from "@/components/ui/empty-state";
-import { Modal, ModalHeader, ModalBody } from "@/components/ui/modal";
-import { ModelSelector } from "@/components/model-selector";
+import { FormLabel } from "@/components/ui/form-field";
+import { LoadingState } from "@/components/ui/empty-state";
 
 interface ProviderEntry {
   id: string;
@@ -16,195 +14,133 @@ interface ProviderEntry {
   isActive: boolean;
 }
 
-const PROVIDER_META: Record<string, { label: string; placeholder: string }> = {
-  openai: { label: "OpenAI", placeholder: "sk-..." },
-  anthropic: { label: "Anthropic", placeholder: "sk-ant-..." },
-  google: { label: "Google", placeholder: "AIza..." },
-  xai: { label: "xAI", placeholder: "xai-..." },
-};
-
-const PROVIDER_OPTIONS = Object.entries(PROVIDER_META).map(([value, { label }]) => ({ value, label }));
+const ALL_PROVIDERS = [
+  { key: "openai", label: "OpenAI", placeholder: "sk-..." },
+  { key: "anthropic", label: "Anthropic", placeholder: "sk-ant-..." },
+  { key: "google", label: "Google", placeholder: "AIza..." },
+  { key: "xai", label: "xAI", placeholder: "xai-..." },
+] as const;
 
 export function ProvidersSection() {
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editTarget, setEditTarget] = useState<ProviderEntry | null>(null);
-  const [defaultEvalModel, setDefaultEvalModel] = useState("gpt-4o-mini");
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [provRes, settingsRes] = await Promise.all([
-        fetch("/api/providers"),
-        fetch("/api/settings"),
-      ]);
-      const provData = await provRes.json();
-      const settingsData = await settingsRes.json();
-      setProviders(provData.providers ?? []);
-      if (settingsData.defaultEvalModel) setDefaultEvalModel(settingsData.defaultEvalModel);
+      const res = await fetch("/api/providers");
+      const data = await res.json();
+      setProviders(data.providers ?? []);
     } catch {}
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  async function handleDelete(p: ProviderEntry) {
-    if (!confirm(`Delete ${PROVIDER_META[p.provider]?.label || p.provider} provider?`)) return;
-    await fetch(`/api/providers/${p.id}`, { method: "DELETE" });
-    await load();
-  }
+  const providerMap = new Map<string, ProviderEntry>();
+  for (const p of providers) providerMap.set(p.provider, p);
 
-  async function handleDefaultModelChange(model: string) {
-    setDefaultEvalModel(model);
-    await fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ defaultEvalModel: model }),
-    });
-  }
-
-  const registeredProviders = new Set(providers.map((p) => p.provider));
+  const configuredCount = providers.length;
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold">LLM Providers</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Register API keys to enable models from each provider.
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold tracking-tight">LLM Providers</h2>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Register API keys to enable models across playground, evaluations, and dataset runs.
         </p>
       </div>
 
       {loading && <LoadingState />}
 
       {!loading && (
-        <div className="space-y-6">
-          {/* Default Eval Model */}
-          <div className="rounded-lg border px-4 py-3">
-            <FormLabel>Default Eval Model</FormLabel>
-            <p className="mb-2 text-xs text-muted-foreground">
-              Used when an eval does not have a specific model configured.
-            </p>
-            <div className="w-64">
-              <ModelSelector value={defaultEvalModel} onChange={handleDefaultModelChange} />
+        <div className="space-y-8">
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
+                Providers
+              </h3>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                {configuredCount}/{ALL_PROVIDERS.length}
+              </span>
+              <div className="h-px flex-1 bg-border" />
             </div>
-          </div>
-
-          {/* Provider list */}
-          <div className="space-y-3">
-            {providers.map((p) => (
-              <div key={p.id} className="flex items-center gap-4 rounded-lg border px-4 py-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">
-                    {PROVIDER_META[p.provider]?.label || p.provider}
-                  </p>
-                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">{p.apiKey}</p>
-                </div>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    p.isActive ? "bg-[#10b981] text-white" : "bg-[#ef4444] text-white"
-                  }`}
-                >
-                  {p.isActive ? "Active" : "Inactive"}
-                </span>
-                <button
-                  onClick={() => {
-                    setEditTarget(p);
-                    setShowForm(true);
-                  }}
-                  className="rounded p-1.5 transition-colors hover:bg-muted"
-                  title="Edit"
-                >
-                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-                <button
-                  onClick={() => handleDelete(p)}
-                  className="rounded p-1.5 transition-colors hover:bg-muted"
-                  title="Delete"
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-              </div>
-            ))}
-
-            {providers.length === 0 && (
-              <EmptyState
-                icon={Key}
-                title="No providers registered"
-                description="Add an LLM provider to start using models in playground and evaluations."
-              />
-            )}
-
-            <button
-              onClick={() => {
-                setEditTarget(null);
-                setShowForm(true);
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed py-3 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-            >
-              <Plus className="h-4 w-4" />
-              Add Provider
-            </button>
-          </div>
+            <div className="space-y-2">
+              {ALL_PROVIDERS.map(({ key, label, placeholder }) => (
+                <ProviderRow
+                  key={key}
+                  providerKey={key}
+                  label={label}
+                  placeholder={placeholder}
+                  existing={providerMap.get(key) ?? null}
+                  onUpdate={load}
+                />
+              ))}
+            </div>
+          </section>
         </div>
-      )}
-
-      {showForm && (
-        <ProviderFormModal
-          existing={editTarget}
-          registeredProviders={registeredProviders}
-          onClose={() => {
-            setShowForm(false);
-            setEditTarget(null);
-          }}
-          onSave={() => {
-            setShowForm(false);
-            setEditTarget(null);
-            load();
-          }}
-        />
       )}
     </div>
   );
 }
 
-function ProviderFormModal({
+// ── Individual Provider Row ──
+
+function ProviderRow({
+  providerKey,
+  label,
+  placeholder,
   existing,
-  registeredProviders,
-  onClose,
-  onSave,
+  onUpdate,
 }: {
+  providerKey: string;
+  label: string;
+  placeholder: string;
   existing: ProviderEntry | null;
-  registeredProviders: Set<string>;
-  onClose: () => void;
-  onSave: () => void;
+  onUpdate: () => void;
 }) {
-  const isEdit = !!existing;
-  const [provider, setProvider] = useState(existing?.provider ?? "");
   const [apiKey, setApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
-  const [error, setError] = useState<string | undefined>();
+  const [deleting, setDeleting] = useState(false);
 
-  const availableProviders = PROVIDER_OPTIONS.filter((o) =>
-    isEdit ? o.value === existing.provider : !registeredProviders.has(o.value),
-  );
+  const isConfigured = !!existing;
+
+  async function handleSave() {
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    try {
+      if (existing) {
+        await fetch(`/api/providers/${existing.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apiKey }),
+        });
+      } else {
+        await fetch("/api/providers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: providerKey, apiKey }),
+        });
+      }
+      setApiKey("");
+      setTestResult(null);
+      onUpdate();
+    } catch {}
+    setSaving(false);
+  }
 
   async function handleTest() {
-    if (!provider || !apiKey) {
-      setError("Select a provider and enter an API key.");
-      return;
-    }
+    if (!apiKey.trim()) return;
     setTesting(true);
     setTestResult(null);
     try {
       const res = await fetch("/api/providers/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey }),
+        body: JSON.stringify({ provider: providerKey, apiKey: apiKey.trim() }),
       });
       setTestResult(await res.json());
     } catch {
@@ -213,130 +149,96 @@ function ProviderFormModal({
     setTesting(false);
   }
 
-  async function handleSave() {
-    if (!provider) {
-      setError("Select a provider.");
-      return;
-    }
-    if (!apiKey && !isEdit) {
-      setError("Enter an API key.");
-      return;
-    }
-    setError(undefined);
-    setSaving(true);
-    try {
-      if (isEdit) {
-        const body: Record<string, unknown> = {};
-        if (apiKey) body.apiKey = apiKey;
-        const res = await fetch(`/api/providers/${existing.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const d = await res.json();
-          setError(d.error ?? "Failed to update.");
-          return;
-        }
-      } else {
-        const res = await fetch("/api/providers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider, apiKey }),
-        });
-        if (!res.ok) {
-          const d = await res.json();
-          setError(d.error ?? "Failed to save.");
-          return;
-        }
-      }
-      onSave();
-    } catch {
-      setError("Network error.");
-    } finally {
-      setSaving(false);
-    }
+  async function handleDelete() {
+    if (!existing) return;
+    setDeleting(true);
+    await fetch(`/api/providers/${existing.id}`, { method: "DELETE" });
+    setTestResult(null);
+    onUpdate();
+    setDeleting(false);
   }
 
   return (
-    <Modal open onClose={onClose} className="w-[480px]">
-      <ModalHeader onClose={onClose}>
-        {isEdit ? `Edit: ${PROVIDER_META[existing.provider]?.label}` : "Add Provider"}
-      </ModalHeader>
-      <ModalBody>
-        <div className="space-y-4">
-          <div>
-            <FormLabel>Provider</FormLabel>
-            <select
-              value={provider}
-              onChange={(e) => {
-                setProvider(e.target.value);
-                setTestResult(null);
-              }}
-              disabled={isEdit}
-              className="h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="">Select provider...</option>
-              {availableProviders.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+    <div className="group rounded-lg border transition-colors hover:border-foreground/15">
+      <div className="px-4 py-3 space-y-2.5">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-[10px] font-bold uppercase text-muted-foreground">
+            {label.slice(0, 2)}
           </div>
-          <div>
-            <FormLabel>API Key</FormLabel>
-            <Input
-              type="password"
-              placeholder={PROVIDER_META[provider]?.placeholder ?? "Enter API key"}
-              value={apiKey}
-              onChange={(e) => {
-                setApiKey(e.target.value);
-                setTestResult(null);
-              }}
-            />
-            {isEdit && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Leave blank to keep the current key. Current: {existing.apiKey}
-              </p>
-            )}
-          </div>
-          {testResult && (
-            <div
-              className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
-                testResult.success
-                  ? "border-[#10b981]/30 text-[#10b981]"
-                  : "border-[#ef4444]/30 text-[#ef4444]"
-              }`}
-            >
-              {testResult.success ? (
-                <CheckCircle className="h-4 w-4" />
-              ) : (
-                <XCircle className="h-4 w-4" />
-              )}
-              {testResult.success ? "Connection successful" : testResult.error || "Connection failed"}
-            </div>
+          <p className="flex-1 text-sm font-semibold">{label}</p>
+          {isConfigured ? (
+            <span className="rounded-full bg-[#10b981] px-2 py-0.5 text-[10px] font-semibold text-white">
+              Active
+            </span>
+          ) : (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground/60">
+              Not configured
+            </span>
           )}
-          {error && <FormError message={error} />}
-          <div className="flex justify-end gap-2 border-t pt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTest}
-              disabled={testing || !provider || !apiKey}
-            >
-              {testing ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : null}
-              Test Connection
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : isEdit ? "Update" : "Add"}
-            </Button>
-          </div>
         </div>
-      </ModalBody>
-    </Modal>
+
+        {/* Configured: masked key + remove */}
+        {isConfigured && (
+          <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-1.5">
+            <p className="flex-1 font-mono text-[11px] text-muted-foreground">{existing.apiKey}</p>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-[11px] font-medium text-muted-foreground/60 transition-colors hover:text-foreground"
+            >
+              {deleting ? "..." : "Remove"}
+            </button>
+          </div>
+        )}
+
+        {/* API Key input */}
+        <div className="flex items-center gap-1.5">
+          <div className="relative flex-1">
+            <Input
+              type={showKey ? "text" : "password"}
+              placeholder={isConfigured ? "New key to replace..." : placeholder}
+              value={apiKey}
+              onChange={(e) => { setApiKey(e.target.value); setTestResult(null); }}
+              className="pr-8 font-mono text-xs"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(!showKey)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground"
+            >
+              {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-3 text-xs"
+            onClick={handleTest}
+            disabled={testing || !apiKey.trim()}
+          >
+            {testing ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+          </Button>
+          <Button
+            size="sm"
+            className="h-9 px-3 text-xs"
+            onClick={handleSave}
+            disabled={saving || !apiKey.trim()}
+          >
+            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : isConfigured ? "Replace" : "Save"}
+          </Button>
+        </div>
+
+        {/* Test result */}
+        {testResult && (
+          <div className={`flex items-center gap-1.5 text-[11px] font-medium ${
+            testResult.success ? "text-[#10b981]" : "text-[#ef4444]"
+          }`}>
+            {testResult.success ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+            {testResult.success ? "Connection verified" : testResult.error || "Connection failed"}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
