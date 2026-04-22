@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AgentModelSelector } from "@/components/agent-model-selector";
 import { CSVImportModal } from "@/components/csv-import-modal";
 import { EvalSelectorModal, type EvalOverrides } from "@/components/eval-selector-modal";
 import { cn } from "@/lib/utils";
@@ -62,7 +63,6 @@ export function DatasetManager() {
 
   const [agentConfigs, setAgentConfigs] = useState<AgentConfigOption[]>([]);
   const [selectedAgent, setSelectedAgent] = useState("");
-  const [providerModels, setProviderModels] = useState<{ provider: string; models: string[] }[]>([]);
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
 
@@ -108,32 +108,6 @@ export function DatasetManager() {
   useEffect(() => {
     fetch("/api/agent-config").then(r => r.json()).then(d => setAgentConfigs(d.configs ?? [])).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    fetch("/api/providers")
-      .then((r) => r.json())
-      .then((data) => {
-        const models: { provider: string; models: string[] }[] = [];
-        for (const p of data.providers ?? []) {
-          if (!p.isActive) continue;
-          const modelMap: Record<string, string[]> = {
-            openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1", "gpt-4.1-mini"],
-            anthropic: ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
-            google: ["gemini-2.5-flash", "gemini-2.0-flash"],
-            xai: ["grok-3-mini", "grok-3"],
-          };
-          models.push({ provider: p.provider, models: modelMap[p.provider] ?? [] });
-        }
-        setProviderModels(models);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!selectedAgent && providerModels.length > 0 && providerModels[0].models.length > 0) {
-      setSelectedAgent(`llm:${providerModels[0].models[0]}`);
-    }
-  }, [providerModels, selectedAgent]);
 
   const loadEvals = useCallback(async () => {
     try {
@@ -469,10 +443,11 @@ export function DatasetManager() {
           <SidebarHeader>Datasets</SidebarHeader>
           <button
             onClick={() => setCreating(true)}
-            className="rounded p-1 hover:bg-muted"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             title="New dataset"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3" />
+            Dataset
           </button>
         </div>
 
@@ -579,28 +554,9 @@ export function DatasetManager() {
                 {/* Row 1: Generate */}
                 <div className="flex items-center gap-3">
                   <p className="w-24 shrink-0 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Agent</p>
-                  <select
-                    value={selectedAgent}
-                    onChange={e => setSelectedAgent(e.target.value)}
-                    className="h-8 w-52 rounded-md border bg-background px-2 text-xs"
-                  >
-                    <optgroup label="Direct LLM">
-                      {providerModels.map(({ provider, models }) =>
-                        models.map((m) => (
-                          <option key={m} value={`llm:${m}`}>
-                            {provider.charAt(0).toUpperCase() + provider.slice(1)} · {m}
-                          </option>
-                        ))
-                      )}
-                    </optgroup>
-                    <optgroup label="Agents">
-                      {agentConfigs.map(c => (
-                        <option key={c.id} value={`agent:${c.id}`}>
-                          {c.template?.name || c.alias?.trim() || c.project} ({c.agentType})
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
+                  <div className="w-52">
+                    <AgentModelSelector value={selectedAgent} onChange={setSelectedAgent} />
+                  </div>
                   {generating ? (
                     <Button onClick={handleCancel} variant="outline" className="h-8 gap-1.5 text-xs">
                       <X className="size-3" /> Stop ({genProgress}%)

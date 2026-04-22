@@ -24,6 +24,7 @@ import {
   Plus,
   X,
   Database,
+  MessageSquarePlus,
 } from "lucide-react";
 import { Nav } from "@/components/nav";
 import { Sidebar } from "@/components/ui/sidebar";
@@ -31,6 +32,7 @@ import { AnnotationBadges } from "@/components/annotation-badge";
 import { AddToDatasetModal } from "@/components/add-to-dataset-modal";
 import { PromptEditModal } from "@/components/prompt-edit-modal";
 import { PromptsModal } from "@/components/prompts-modal";
+import { AnnotationForm } from "@/components/annotation-form";
 
 interface VersionOption {
   promptName: string;
@@ -47,6 +49,7 @@ interface Column {
   result: ComparisonResult | null;
   running: boolean;
   entering: boolean;
+  spanId?: string;
 }
 
 function makeColumn(
@@ -95,6 +98,7 @@ export function Playground() {
   const [originalContextOpen, setOriginalContextOpen] = useState(false);
   const [datasetModalOpen, setDatasetModalOpen] = useState(false);
   const [promptsModalOpen, setPromptsModalOpen] = useState(false);
+  const [annotateSpanId, setAnnotateSpanId] = useState<string | null>(null);
 
   // Init first column once prompts load
   useEffect(() => {
@@ -152,6 +156,7 @@ export function Playground() {
       updateColumn(colId, {
         running: false,
         result: { label, text: r.text, tokens: r.tokens, loading: false },
+        spanId: r.spanId,
       });
     } catch (e: any) {
       updateColumn(colId, {
@@ -451,11 +456,21 @@ export function Playground() {
                             })}
                           </time>
                         </div>
-                        {t.annotations.length > 0 && (
-                          <div className="mt-1">
+                        <div className="mt-1 flex items-center gap-1">
+                          {t.annotations.length > 0 && (
                             <AnnotationBadges annotations={t.annotations} />
-                          </div>
-                        )}
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAnnotateSpanId(t.spanId);
+                            }}
+                            className="rounded p-0.5 text-muted-foreground/30 transition-colors hover:bg-muted hover:text-foreground opacity-0 group-hover:opacity-100"
+                            title="Add annotation"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -682,11 +697,22 @@ export function Playground() {
                           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                             Result
                           </span>
-                          {!col.result.loading && col.result.tokens > 0 && (
-                            <span className="text-[10px] tabular-nums text-muted-foreground">
-                              {col.result.tokens} tokens
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {!col.result.loading && col.result.tokens > 0 && (
+                              <span className="text-[10px] tabular-nums text-muted-foreground">
+                                {col.result.tokens} tokens
+                              </span>
+                            )}
+                            {col.spanId && (
+                              <button
+                                onClick={() => setAnnotateSpanId(col.spanId!)}
+                                className="rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
+                                title="Annotate this result"
+                              >
+                                <MessageSquarePlus className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         {col.result.loading ? (
                           <div className="flex items-center gap-2 py-6 text-muted-foreground">
@@ -756,6 +782,16 @@ export function Playground() {
           }}
         />
       )}
+
+      <AnnotationForm
+        open={!!annotateSpanId}
+        onClose={() => setAnnotateSpanId(null)}
+        spanId={annotateSpanId ?? ""}
+        onSaved={() => {
+          setAnnotateSpanId(null);
+          loadTraces();
+        }}
+      />
 
       {/* Filter dropdown */}
       {filterOpen && (

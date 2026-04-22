@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, createContext, useContext } from "react";
+import { User } from "lucide-react";
 import { Annotation } from "@/lib/phoenix";
 
 // Fallback short names
@@ -96,7 +97,8 @@ export function AnnotationBadge({ annotation, outputMode, failThreshold = 0, onD
       className={`group/badge relative inline-flex items-center rounded text-[9px] font-mono tabular-nums leading-none
         ${good ? "border border-foreground/15" : "border-2 border-foreground"}`}
     >
-      <span className={`px-1.5 py-1 ${good ? "bg-foreground/5 text-foreground/50" : "bg-foreground/10 text-foreground font-semibold"}`}>
+      <span className={`flex items-center gap-0.5 px-1.5 py-1 ${good ? "bg-foreground/5 text-foreground/50" : "bg-foreground/10 text-foreground font-semibold"}`}>
+        {annotation.annotatorKind === "HUMAN" && <User className="h-2.5 w-2.5" />}
         {short}
       </span>
       {showScore ? (

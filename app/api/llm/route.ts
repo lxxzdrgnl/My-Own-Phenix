@@ -18,10 +18,11 @@ export async function POST(req: NextRequest) {
 
     const endTime = new Date().toISOString();
 
+    const traceId = crypto.randomUUID().replace(/-/g, "");
+    const spanId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+
     // Record span to Phoenix playground project
     try {
-      const traceId = crypto.randomUUID().replace(/-/g, "");
-      const spanId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 
       await fetch(`${PHOENIX}/v1/projects/playground/spans`, {
         method: "POST",
@@ -64,6 +65,8 @@ export async function POST(req: NextRequest) {
         completion_tokens: result.usage.completionTokens,
         total_tokens: result.usage.totalTokens,
       },
+      _spanId: spanId,
+      _traceId: traceId,
     });
   } catch (e) {
     return NextResponse.json(

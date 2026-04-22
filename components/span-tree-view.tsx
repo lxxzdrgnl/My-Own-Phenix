@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { type RawSpan, type TraceTree } from "@/lib/phoenix";
+import { type RawSpan, type TraceTree, type Annotation } from "@/lib/phoenix";
 import { AnnotationBadges } from "@/components/annotation-badge";
+import { AnnotationForm } from "@/components/annotation-form";
 import { cn } from "@/lib/utils";
 import {
   ChevronRight,
@@ -19,6 +20,7 @@ import {
   XCircle,
   Timer,
   Zap,
+  Plus,
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -218,7 +220,7 @@ function SpanNode({
 
 // ─── Root Span Header ────────────────────────────────────────────────────────
 
-function RootHeader({ span, onDeleteAnnotation }: { span: RawSpan; onDeleteAnnotation?: (spanId: string, name: string) => void }) {
+function RootHeader({ span, onDeleteAnnotation, onAnnotate }: { span: RawSpan; onDeleteAnnotation?: (spanId: string, name: string) => void; onAnnotate?: (spanId: string, annotations: Annotation[]) => void }) {
   const style = getSpanStyle(span.spanKind);
   const Icon = style.icon;
 
@@ -259,21 +261,33 @@ function RootHeader({ span, onDeleteAnnotation }: { span: RawSpan; onDeleteAnnot
           </span>
         )}
       </div>
-      {span.annotations.length > 0 && (
-        <div className="mt-2">
+      <div className="mt-2 flex items-center gap-1.5">
+        {span.annotations.length > 0 && (
           <AnnotationBadges
             annotations={span.annotations}
             onDelete={onDeleteAnnotation ? (name) => onDeleteAnnotation(span.spanId, name) : undefined}
           />
-        </div>
-      )}
+        )}
+        {onAnnotate && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAnnotate(span.spanId, span.annotations);
+            }}
+            className="rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
+            title="Add annotation"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 // ─── Span Detail Panel ───────────────────────────────────────────────────────
 
-function SpanDetail({ span, onDeleteAnnotation }: { span: RawSpan; onDeleteAnnotation?: (spanId: string, name: string) => void }) {
+function SpanDetail({ span, onDeleteAnnotation, onAnnotate }: { span: RawSpan; onDeleteAnnotation?: (spanId: string, name: string) => void; onAnnotate?: (spanId: string, annotations: Annotation[]) => void }) {
   const [activeTab, setActiveTab] = useState<"input" | "output">("input");
   const style = getSpanStyle(span.spanKind);
   const Icon = style.icon;
@@ -315,14 +329,26 @@ function SpanDetail({ span, onDeleteAnnotation }: { span: RawSpan; onDeleteAnnot
             </span>
           )}
         </div>
-        {span.annotations.length > 0 && (
-          <div className="mt-2">
+        <div className="mt-2 flex items-center gap-1.5">
+          {span.annotations.length > 0 && (
             <AnnotationBadges
               annotations={span.annotations}
               onDelete={onDeleteAnnotation ? (name) => onDeleteAnnotation(span.spanId, name) : undefined}
             />
-          </div>
-        )}
+          )}
+          {onAnnotate && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAnnotate(span.spanId, span.annotations);
+              }}
+              className="rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
+              title="Add annotation"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -357,12 +383,20 @@ function SpanDetail({ span, onDeleteAnnotation }: { span: RawSpan; onDeleteAnnot
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-function TraceAccordionItem({ trace, onDeleteAnnotation }: {
+function TraceAccordionItem({ trace, onDeleteAnnotation, onRefresh }: {
   trace: TraceTree;
   onDeleteAnnotation?: (spanId: string, name: string) => void;
+  onRefresh?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [selectedSpan, setSelectedSpan] = useState<RawSpan | null>(null);
+  const [annotateSpanId, setAnnotateSpanId] = useState<string | null>(null);
+  const [annotateAnnotations, setAnnotateAnnotations] = useState<Annotation[]>([]);
+
+  function handleAnnotate(spanId: string, annotations: Annotation[]) {
+    setAnnotateSpanId(spanId);
+    setAnnotateAnnotations(annotations);
+  }
   const style = getSpanStyle(trace.rootSpan.spanKind);
   const Icon = style.icon;
 
@@ -407,11 +441,21 @@ function TraceAccordionItem({ trace, onDeleteAnnotation }: {
               second: "2-digit",
             })}
           </p>
-          {trace.rootSpan.annotations.length > 0 && (
-            <div className="mt-1">
+          <div className="mt-1 flex items-center gap-1.5">
+            {trace.rootSpan.annotations.length > 0 && (
               <AnnotationBadges annotations={trace.rootSpan.annotations} />
-            </div>
-          )}
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAnnotate(trace.rootSpan.spanId, trace.rootSpan.annotations);
+              }}
+              className="rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
+              title="Add annotation"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <StatusIcon status={trace.rootSpan.status} />
@@ -427,7 +471,7 @@ function TraceAccordionItem({ trace, onDeleteAnnotation }: {
         <div className="flex border-t" style={{ minHeight: "300px" }}>
           {/* Left: span tree — no scroll, drives container height */}
           <div className="w-[400px] shrink-0 border-r bg-card">
-            <RootHeader span={trace.rootSpan} onDeleteAnnotation={onDeleteAnnotation} />
+            <RootHeader span={trace.rootSpan} onDeleteAnnotation={onDeleteAnnotation} onAnnotate={handleAnnotate} />
             <div className="py-1">
               {trace.rootSpan.children.map((child, i) => (
                 <SpanNode
@@ -445,7 +489,7 @@ function TraceAccordionItem({ trace, onDeleteAnnotation }: {
           {/* Right: detail — scrolls independently, sticky to viewport */}
           <div className="flex-1 min-w-0 overflow-y-auto max-h-[600px]">
             {selectedSpan ? (
-              <SpanDetail span={selectedSpan} onDeleteAnnotation={onDeleteAnnotation} />
+              <SpanDetail span={selectedSpan} onDeleteAnnotation={onDeleteAnnotation} onAnnotate={handleAnnotate} />
             ) : (
               <div className="flex h-full min-h-[300px] items-center justify-center text-sm text-muted-foreground">
                 Select a span
@@ -454,6 +498,16 @@ function TraceAccordionItem({ trace, onDeleteAnnotation }: {
           </div>
         </div>
       )}
+      <AnnotationForm
+        open={!!annotateSpanId}
+        onClose={() => setAnnotateSpanId(null)}
+        spanId={annotateSpanId ?? ""}
+        existingAnnotations={annotateAnnotations}
+        onSaved={() => {
+          setAnnotateSpanId(null);
+          onRefresh?.();
+        }}
+      />
     </div>
   );
 }
@@ -487,6 +541,7 @@ export function SpanTreeView({
           key={t.traceId}
           trace={t}
           onDeleteAnnotation={projectName ? handleDeleteAnnotation : undefined}
+          onRefresh={onRefresh}
         />
       ))}
       {traces.length === 0 && (

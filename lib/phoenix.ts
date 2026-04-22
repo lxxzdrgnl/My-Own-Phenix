@@ -20,6 +20,7 @@ export interface Annotation {
   name: string;
   label: string;
   score: number;
+  annotatorKind?: "LLM" | "HUMAN";
 }
 
 export interface PromptVersion {
@@ -143,6 +144,7 @@ async function fetchSpansAndAnnotations(
               name: a.name,
               label: a.result?.label ?? "",
               score: a.result?.score ?? 0,
+              annotatorKind: a.annotator_kind ?? undefined,
             });
           }
         })
@@ -653,7 +655,7 @@ export async function callLLM(
   version: PromptVersion,
   query: string,
   context: string,
-): Promise<{ text: string; tokens: number }> {
+): Promise<{ text: string; tokens: number; spanId?: string }> {
   const messages = (version.template?.messages ?? []).map((m) => ({
     role: m.role,
     content: normalizeContent(m.content)
@@ -680,5 +682,6 @@ export async function callLLM(
   return {
     text: data.choices[0].message.content,
     tokens: data.usage?.total_tokens ?? 0,
+    spanId: data._spanId,
   };
 }
