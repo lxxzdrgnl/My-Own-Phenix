@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { callLlm } from "@/lib/llm-providers";
 import { requireAuth } from "@/lib/auth-server";
+import { PASS_LABELS } from "@/lib/constants";
 
 const PHOENIX = process.env.PHOENIX_URL ?? "http://localhost:6006";
 
@@ -113,8 +114,6 @@ function splitPromptForSystem(template: string): { system: string | null; user: 
   if (dataStart <= 0) return { system: null, user: template };
   return { system: lines.slice(0, dataStart).join("\n").trim(), user: lines.slice(dataStart).join("\n").trim() };
 }
-
-const PASS_LABELS = new Set(["pass", "true", "yes", "correct", "factual", "faithful", "appropriate", "clean", "relevant"]);
 
 // ── POST /api/eval-backfill ──
 

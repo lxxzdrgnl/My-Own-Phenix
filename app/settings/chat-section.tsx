@@ -2,9 +2,10 @@
 import { apiFetch } from "@/lib/api-client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Trash2, Bot, Pencil, Plus } from "lucide-react";
+import { Trash2, Bot, Pencil, Plus, MessageCircle, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { FormLabel, FormError } from "@/components/ui/form-field";
 import { LoadingState, EmptyState } from "@/components/ui/empty-state";
 import { Modal, ModalHeader, ModalBody } from "@/components/ui/modal";
@@ -149,7 +150,225 @@ export function ChatSection() {
           onSave={() => { setShowAdd(false); setEditTarget(null); load(); }}
         />
       )}
+
+      {!loading && <StarterQuestionsSection />}
     </div>
+  );
+}
+
+// ── Starter Questions Section ──
+
+import { ChatSuggestion, DEFAULT_CHAT_SUGGESTIONS, MAX_CHAT_SUGGESTIONS, parseChatSuggestions } from "@/lib/constants";
+
+function StarterQuestionsSection() {
+  const [suggestions, setSuggestions] = useState<ChatSuggestion[]>(DEFAULT_CHAT_SUGGESTIONS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiFetch("/api/settings");
+      const data = await res.json();
+      setSuggestions(parseChatSuggestions(data.chatSuggestions));
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await apiFetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatSuggestions: JSON.stringify(suggestions) }),
+      });
+      setSaved(true);
+      setDirty(false);
+    } catch {}
+    setSaving(false);
+  }
+
+  function handleDelete(idx: number) {
+    setSuggestions((prev) => prev.filter((_, i) => i !== idx));
+    setDirty(true);
+    setSaved(false);
+  }
+
+  function handleAdd() {
+    if (suggestions.length >= MAX_CHAT_SUGGESTIONS) return;
+    setSuggestions((prev) => [...prev, { title: "", label: "", prompt: "" }]);
+    setEditIdx(suggestions.length);
+    setDirty(true);
+    setSaved(false);
+  }
+
+  function handleUpdate(idx: number, updated: ChatSuggestion) {
+    setSuggestions((prev) => prev.map((s, i) => (i === idx ? updated : s)));
+    setDirty(true);
+    setSaved(false);
+  }
+
+  if (loading) return null;
+
+  return (
+    <div className="mt-10">
+      <div className="mb-3 flex items-center gap-2">
+        <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
+          Starter Questions
+        </h3>
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+          {suggestions.length}
+        </span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Suggested questions shown on the chat welcome screen.
+      </p>
+
+      {suggestions.length === 0 && (
+        <EmptyState
+          icon={MessageCircle}
+          title="No starter questions"
+          description="Add questions to display on the chat welcome screen."
+        />
+      )}
+
+      <div className="space-y-2">
+        {suggestions.map((s, idx) => (
+          <div key={idx} className="rounded-lg border transition-colors hover:border-foreground/15">
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-[10px] font-bold text-muted-foreground">
+                  {idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{s.title || "Untitled"}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground/60 truncate">{s.label || "No subtitle"}</p>
+                </div>
+                <button
+                  onClick={() => setEditIdx(idx)}
+                  className="rounded p-1.5 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
+                  title="Edit"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDelete(idx)}
+                  className="rounded p-1.5 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
+                  title="Delete"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {suggestions.length < MAX_CHAT_SUGGESTIONS && (
+          <button
+            onClick={handleAdd}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-3 text-sm text-muted-foreground/60 transition-colors hover:border-foreground/20 hover:text-foreground"
+          >
+            <Plus className="h-4 w-4" />
+            Add Question ({suggestions.length}/{MAX_CHAT_SUGGESTIONS})
+          </button>
+        )}
+      </div>
+
+      {/* Save bar */}
+      <div className="mt-5 flex items-center gap-3 border-t pt-5">
+        <Button onClick={handleSave} disabled={saving || !dirty} size="sm">
+          {saving && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+          Save Changes
+        </Button>
+        {saved && (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CheckCircle className="h-3.5 w-3.5 text-[#10b981]" />
+            Saved
+          </span>
+        )}
+        {dirty && !saved && (
+          <span className="text-xs text-muted-foreground/50">Unsaved changes</span>
+        )}
+      </div>
+
+      {editIdx !== null && (
+        <SuggestionEditModal
+          suggestion={suggestions[editIdx]}
+          onClose={() => setEditIdx(null)}
+          onSave={(updated) => {
+            handleUpdate(editIdx, updated);
+            setEditIdx(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SuggestionEditModal({
+  suggestion,
+  onClose,
+  onSave,
+}: {
+  suggestion: ChatSuggestion;
+  onClose: () => void;
+  onSave: (s: ChatSuggestion) => void;
+}) {
+  const [title, setTitle] = useState(suggestion.title);
+  const [label, setLabel] = useState(suggestion.label);
+  const [prompt, setPrompt] = useState(suggestion.prompt);
+
+  function handleSubmit() {
+    if (!title.trim() || !prompt.trim()) return;
+    onSave({ title: title.trim(), label: label.trim(), prompt: prompt.trim() });
+  }
+
+  return (
+    <Modal open onClose={onClose} className="w-[480px]">
+      <ModalHeader onClose={onClose}>Edit Starter Question</ModalHeader>
+      <ModalBody>
+        <div className="space-y-4">
+          <div>
+            <FormLabel>Title</FormLabel>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. How to deploy?"
+            />
+          </div>
+          <div>
+            <FormLabel>Subtitle</FormLabel>
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="e.g. Step-by-step guide"
+            />
+          </div>
+          <div>
+            <FormLabel>Prompt</FormLabel>
+            <Textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="The full question sent to the agent..."
+              rows={3}
+            />
+          </div>
+          <div className="flex justify-end gap-2 border-t pt-3">
+            <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+            <Button size="sm" onClick={handleSubmit} disabled={!title.trim() || !prompt.trim()}>
+              Save
+            </Button>
+          </div>
+        </div>
+      </ModalBody>
+    </Modal>
   );
 }
 

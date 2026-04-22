@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { FormLabel, FormError } from "@/components/ui/form-field";
 import { LoadingState, EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
+import { AGENT_TYPES } from "@/lib/constants";
 
 interface AgentConfig {
   endpoint: string;
@@ -35,11 +36,6 @@ interface AgentConfigModalProps {
 }
 
 type Tab = "select" | "manage";
-
-const AGENT_TYPES = [
-  { value: "langgraph", label: "LangGraph" },
-  { value: "rest", label: "REST SSE" },
-];
 
 export function AgentConfigModal({ open, onClose, project, onSaved }: AgentConfigModalProps) {
   const [tab, setTab] = useState<Tab>("select");

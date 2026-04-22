@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api-client";
 import { useEffect, useState, createContext, useContext } from "react";
 import { User } from "lucide-react";
 import { Annotation } from "@/lib/phoenix";
+import { PASS_LABELS, FAIL_LABELS } from "@/lib/constants";
 
 // Fallback short names
 const SHORT_NAME: Record<string, string> = {
@@ -55,8 +56,7 @@ function getShortName(name: string, labels: Record<string, string>): string {
   return SHORT_NAME[name] ?? name.slice(0, 3).toUpperCase();
 }
 
-const GOOD_LABELS = ["factual", "correct", "clean", "relevant", "faithful", "success", "positive", "appropriate", "pass", "true"];
-const FAIL_LABELS = ["hallucinated", "incorrect", "detected", "irrelevant", "unfaithful", "fail", "false"];
+// PASS_LABELS and FAIL_LABELS imported from lib/constants
 
 // Score-based evals: score is 0-1 range, not just 0 or 1
 function isScoreMode(a: Annotation): boolean {
@@ -68,9 +68,8 @@ function isScoreMode(a: Annotation): boolean {
 }
 
 function isGood(a: Annotation): boolean {
-  if (FAIL_LABELS.includes(a.label)) return false;
-  if (GOOD_LABELS.includes(a.label)) return true;
-  // Fallback: score > 0.5 is good
+  if (FAIL_LABELS.has(a.label)) return false;
+  if (PASS_LABELS.has(a.label)) return true;
   return a.score > 0.5;
 }
 

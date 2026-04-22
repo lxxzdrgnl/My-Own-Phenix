@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FormLabel, FormError } from "@/components/ui/form-field";
 import { LoadingState, EmptyState } from "@/components/ui/empty-state";
+import { AGENT_TYPES } from "@/lib/constants";
 
 interface AgentEntry {
   id: string;
@@ -21,11 +22,6 @@ interface AgentEntry {
   assistantId: string;
   evalPrompts: string;
 }
-
-const AGENT_TYPES = [
-  { value: "langgraph", label: "LangGraph" },
-  { value: "rest", label: "REST SSE" },
-];
 
 export function AgentsSection() {
   const [agents, setAgents] = useState<AgentEntry[]>([]);

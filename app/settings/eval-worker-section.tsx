@@ -1,21 +1,13 @@
 "use client";
-import { apiFetch } from "@/lib/api-client";
 
-import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingState } from "@/components/ui/empty-state";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { ModelSelector } from "@/components/model-selector";
+import { useSettingsForm } from "@/lib/hooks";
 
-interface WorkerSettings {
-  evalWorkerEnabled: string;
-  evalPollInterval: string;
-  evalMaxLlmPerTrace: string;
-  defaultEvalModel: string;
-}
-
-const DEFAULTS: WorkerSettings = {
+const DEFAULTS = {
   evalWorkerEnabled: "true",
   evalPollInterval: "15",
   evalMaxLlmPerTrace: "5",
@@ -23,48 +15,7 @@ const DEFAULTS: WorkerSettings = {
 };
 
 export function EvalWorkerSection() {
-  const [settings, setSettings] = useState<WorkerSettings>(DEFAULTS);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [dirty, setDirty] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch("/api/settings");
-      const data = await res.json();
-      setSettings({
-        evalWorkerEnabled: data.evalWorkerEnabled ?? DEFAULTS.evalWorkerEnabled,
-        evalPollInterval: data.evalPollInterval ?? DEFAULTS.evalPollInterval,
-        evalMaxLlmPerTrace: data.evalMaxLlmPerTrace ?? DEFAULTS.evalMaxLlmPerTrace,
-        defaultEvalModel: data.defaultEvalModel ?? DEFAULTS.defaultEvalModel,
-      });
-    } catch {}
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  function update(key: keyof WorkerSettings, value: string) {
-    setSettings((prev) => ({ ...prev, [key]: value }));
-    setDirty(true);
-    setSaved(false);
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await apiFetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
-      });
-      setSaved(true);
-      setDirty(false);
-    } catch {}
-    setSaving(false);
-  }
+  const { settings, loading, saving, saved, dirty, update, save } = useSettingsForm(DEFAULTS);
 
   const isEnabled = settings.evalWorkerEnabled === "true";
 
@@ -197,7 +148,7 @@ export function EvalWorkerSection() {
 
           {/* Save bar */}
           <div className="flex items-center gap-3 border-t pt-5">
-            <Button onClick={handleSave} disabled={saving || !dirty} size="sm">
+            <Button onClick={save} disabled={saving || !dirty} size="sm">
               {saving && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
               Save Changes
             </Button>

@@ -2,9 +2,12 @@
 
 import { ThreadPrimitive } from "@assistant-ui/react";
 import { ArrowDownIcon } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
 import type { FC } from "react";
 import { Button } from "@/components/ui/button";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import { apiFetch } from "@/lib/api-client";
+import { ChatSuggestion, DEFAULT_CHAT_SUGGESTIONS, parseChatSuggestions } from "@/lib/constants";
 
 export const ThreadScrollToBottom: FC = () => {
   return (
@@ -20,33 +23,28 @@ export const ThreadScrollToBottom: FC = () => {
   );
 };
 
-const SUGGESTIONS = [
-  {
-    title: "부당해고를 당했어요",
-    label: "어떻게 대응할 수 있나요?",
-    prompt: "회사에서 부당해고를 당했습니다. 어떻게 대응할 수 있나요?",
-  },
-  {
-    title: "전세 보증금을 못 돌려받고 있어요",
-    label: "법적으로 어떤 조치를 취할 수 있나요?",
-    prompt: "집주인이 전세 보증금을 돌려주지 않고 있습니다. 법적으로 어떤 조치를 취할 수 있나요?",
-  },
-  {
-    title: "교통사고 합의금 산정",
-    label: "적정 합의금은 얼마인가요?",
-    prompt: "교통사고로 2주 진단을 받았습니다. 적정 합의금은 얼마인가요?",
-  },
-  {
-    title: "명예훼손으로 고소 당했어요",
-    label: "어떻게 대응해야 하나요?",
-    prompt: "SNS에 올린 글로 명예훼손으로 고소를 당했습니다. 어떻게 대응해야 하나요?",
-  },
-] as const;
+function useChatSuggestions() {
+  const [suggestions, setSuggestions] = useState<ChatSuggestion[]>(DEFAULT_CHAT_SUGGESTIONS);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await apiFetch("/api/settings");
+      const data = await res.json();
+      setSuggestions(parseChatSuggestions(data.chatSuggestions));
+    } catch {}
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return suggestions;
+}
 
 const ThreadSuggestions: FC = () => {
+  const suggestions = useChatSuggestions();
+
   return (
     <div className="aui-thread-welcome-suggestions grid w-full @md:grid-cols-2 gap-2 pb-4">
-      {SUGGESTIONS.map((suggestion, index) => (
+      {suggestions.map((suggestion, index) => (
         <div
           key={suggestion.prompt}
           className="aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-2 @md:nth-[n+3]:block nth-[n+3]:hidden animate-in fill-mode-both duration-200"

@@ -1,60 +1,18 @@
 "use client";
-import { apiFetch } from "@/lib/api-client";
 
-import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingState } from "@/components/ui/empty-state";
 import { CheckCircle, Loader2 } from "lucide-react";
+import { useSettingsForm } from "@/lib/hooks";
+import { DEFAULT_PHOENIX_URL } from "@/lib/constants";
 
-interface GeneralSettings {
-  phoenixUrl: string;
-}
-
-const DEFAULTS: GeneralSettings = {
-  phoenixUrl: "http://localhost:6006",
+const DEFAULTS = {
+  phoenixUrl: DEFAULT_PHOENIX_URL,
 };
 
 export function GeneralSection() {
-  const [settings, setSettings] = useState<GeneralSettings>(DEFAULTS);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [dirty, setDirty] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch("/api/settings");
-      const data = await res.json();
-      setSettings({
-        phoenixUrl: data.phoenixUrl ?? DEFAULTS.phoenixUrl,
-      });
-    } catch {}
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  function update(key: keyof GeneralSettings, value: string) {
-    setSettings((prev) => ({ ...prev, [key]: value }));
-    setDirty(true);
-    setSaved(false);
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await apiFetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
-      });
-      setSaved(true);
-      setDirty(false);
-    } catch {}
-    setSaving(false);
-  }
+  const { settings, loading, saving, saved, dirty, update, save } = useSettingsForm(DEFAULTS);
 
   return (
     <div>
@@ -98,7 +56,7 @@ export function GeneralSection() {
 
           {/* Save bar */}
           <div className="flex items-center gap-3 border-t pt-5">
-            <Button onClick={handleSave} disabled={saving || !dirty} size="sm">
+            <Button onClick={save} disabled={saving || !dirty} size="sm">
               {saving && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
               Save Changes
             </Button>

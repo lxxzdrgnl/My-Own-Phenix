@@ -2,6 +2,7 @@
 import { apiFetch } from "@/lib/api-client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { FAIL_LABELS } from "@/lib/constants";
 import { fetchTraces, fetchTraceTrees, type Trace, type TraceTree } from "@/lib/phoenix";
 import { SpanTreeView } from "@/components/span-tree-view";
 import { StatCard } from "@/components/dashboard/widgets/stat-card";
@@ -70,7 +71,7 @@ function buildScoreChartOptions(traces: Trace[]): Highcharts.Options {
 }
 
 function buildPassFailChartOptions(traces: Trace[]): Highcharts.Options {
-  const FAIL_LABELS = new Set(["hallucinated", "incorrect", "detected", "irrelevant", "unfaithful", "fail", "false"]);
+  // FAIL_LABELS imported from lib/constants
   const byName: Record<string, { pass: number; fail: number }> = {};
   for (const t of traces) {
     for (const a of t.annotations) {
@@ -338,18 +339,16 @@ export function ProjectView({ projectName }: { projectName: string }) {
               <div className="rounded-xl border bg-card h-28">
                 <StatCard
                   value={(() => {
-                    const FAIL_LABELS = ["hallucinated", "incorrect", "detected", "irrelevant", "unfaithful", "fail", "false"];
                     const withAnns = traceTrees.filter((t) => t.rootSpan.annotations.length > 0);
                     if (withAnns.length === 0) return "-";
-                    const passed = withAnns.filter((t) => !t.rootSpan.annotations.some((a) => FAIL_LABELS.includes(a.label))).length;
+                    const passed = withAnns.filter((t) => !t.rootSpan.annotations.some((a) => FAIL_LABELS.has(a.label))).length;
                     return `${Math.round((passed / withAnns.length) * 100)}%`;
                   })()}
                   label="Pass Rate"
                   trend={(() => {
-                    const FAIL_LABELS = ["hallucinated", "incorrect", "detected", "irrelevant", "unfaithful", "fail", "false"];
                     const withAnns = traceTrees.filter((t) => t.rootSpan.annotations.length > 0);
                     if (withAnns.length === 0) return undefined;
-                    const passed = withAnns.filter((t) => !t.rootSpan.annotations.some((a) => FAIL_LABELS.includes(a.label))).length;
+                    const passed = withAnns.filter((t) => !t.rootSpan.annotations.some((a) => FAIL_LABELS.has(a.label))).length;
                     return `${passed} / ${withAnns.length} traces`;
                   })()}
                 />
